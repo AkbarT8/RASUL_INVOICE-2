@@ -1,4 +1,5 @@
 import type { AppStore, Column } from '../../shared/types'
+import { normalizeCell } from './cell-format'
 
 const STORAGE_KEY = 'proforma_workspace_store'
 const CREDS_KEY = 'proforma_credentials'
@@ -39,9 +40,16 @@ export function loadLocalStore(): AppStore {
       settings: { ...DEFAULT_STORE.settings, ...parsed.settings },
       proformas: (parsed.proformas || []).map((pf) => ({
         ...pf,
+        merges: pf.merges || [],
         columns: (pf.columns || []).map((c) => ({
           ...c,
           color: c.color ?? null,
+        })),
+        rows: (pf.rows || []).map((r) => ({
+          ...r,
+          cells: Object.fromEntries(
+            Object.entries(r.cells || {}).map(([k, v]) => [k, normalizeCell(v)]),
+          ),
         })),
       })),
     }

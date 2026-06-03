@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { getClientCredentials } from '../lib/persistence'
 import { ui } from '../lib/theme'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
+import {
+  loadAdminAccounts,
+  saveAdminAccounts,
+  type AdminAccount,
+} from '../lib/admins'
+import { uid } from '../lib/utils'
 
 export function SettingsPage() {
   const settings = useAppStore((s) => s.store.settings)
@@ -295,6 +301,11 @@ export function SettingsPage() {
           </div>
         </section>
 
+
+        <section className={`p-5 ${ui.card}`}>
+          <AdminAccountsSection />
+        </section>
+
         <section className={`p-5 ${ui.card}`}>
           <h3 className="text-[14px] font-semibold text-slate-900">Table & safety</h3>
           <ul className="mt-4 space-y-3">
@@ -348,5 +359,131 @@ export function SettingsPage() {
         </section>
       </div>
     </div>
+  )
+}
+
+function AdminAccountsSection() {
+  const [accounts, setAccounts] = useState<AdminAccount[]>(() => loadAdminAccounts())
+  const [label, setLabel] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({})
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  function persist(next: AdminAccount[]) {
+    setAccounts(next)
+    saveAdminAccounts(next)
+  }
+
+  function addAccount(e: React.FormEvent) {
+    e.preventDefault()
+    setMsg(null)
+    if (!username.trim() || !password) {
+      setMsg({ ok: false, text: 'Укажите логин и пароль' })
+      return
+    }
+    if (accounts.some((a) => a.username === username.trim())) {
+      setMsg({ ok: false, text: 'Такой логин уже есть' })
+      return
+    }
+    const acc: AdminAccount = {
+      id: uid('admin'),
+      username: username.trim(),
+      password,
+      label: label.trim() || username.trim(),
+      createdAt: new Date().toISOString(),
+    }
+    persist([...accounts, acc])
+    setLabel('')
+    setUsername('')
+    setPassword('')
+    setMsg({ ok: true, text: 'Дополнительный админ создан' })
+  }
+
+  function removeAccount(id: string) {
+    if (!window.confirm('Удалить этого админа?')) return
+    persist(accounts.filter((a) => a.id !== id))
+  }
+
+  return (
+    <>
+      <h3 className="text-[14px] font-semibold text-slate-900">Дополнительные админы</h3>
+      <p className={`mt-1 text-[12px] ${ui.textMuted}`}>
+        Создайте второй (и другие) аккаунты для входа. Логин и пароль хранятся локально и
+        скрыты по умолчанию.
+      </p>
+      <form onSubmit={addAccount} className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="text-[12px] font-medium text-slate-600">Подпись</label>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Напр. Менеджер"
+            className={`mt-1 w-full ${ui.input}`}
+          />
+        </div>
+        <div>
+          <label className="text-[12px] font-medium text-slate-600">Логин</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className={`mt-1 w-full ${ui.input}`}
+            required
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="text-[12px] font-medium text-slate-600">Пароль</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={`mt-1 w-full ${ui.input}`}
+            required
+          />
+        </div>
+        {msg && (
+          <p className={`sm:col-span-2 text-[12px] ${msg.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+            {msg.text}
+          </p>
+        )}
+        <div className="sm:col-span-2">
+          <button type="submit" className={ui.btnPrimary}>
+            <Plus className="mr-1 inline h-4 w-4" />
+            Добавить админа
+          </button>
+        </div>
+      </form>
+      {accounts.length > 0 && (
+        <ul className="mt-5 space-y-2">
+          {accounts.map((a) => (
+            <li
+              key={a.id}
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2"
+            >
+              <span className="text-[13px] font-medium text-slate-800">{a.label}</span>
+              <span className="text-[12px] text-slate-500">@{a.username}</span>
+              <code className="rounded bg-white px-2 py-0.5 text-[11px] text-slate-600">
+                {revealed[a.id] ? a.password : '••••••••'}
+              </code>
+              <button
+                type="button"
+                className="ml-auto rounded p-1 text-slate-500 hover:bg-white"
+                onClick={() => setRevealed((r) => ({ ...r, [a.id]: !r[a.id] }))}
+                title={revealed[a.id] ? 'Скрыть' : 'Показать пароль'}
+              >
+                {revealed[a.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeAccount(a.id)}
+                className="rounded p-1 text-red-500 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   )
 }

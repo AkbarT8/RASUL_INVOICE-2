@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Client, Proforma } from '../../../shared/types'
-import { exportProformaAsInvoice } from '../../lib/excel'
+import { downloadInvoicePdf } from '../../lib/pdf-invoice'
 import { getSortedRows, getVisibleColumns } from '../../lib/excel-utils'
 import { colorStyle } from '../../lib/colors'
 import { ui } from '../../lib/theme'
@@ -46,7 +46,7 @@ export function InvoicePreviewModal({
     billToCompany: initial.billToCompany,
     billToCountry: initial.billToCountry,
     billToPhone: initial.billToPhone,
-    filename: initial.filename || `Invoice_${proforma.number}`,
+    filename: initial.filename || `Invoice_${proforma.number}.pdf`,
   })
 
   const columns = useMemo(() => {
@@ -74,7 +74,7 @@ export function InvoicePreviewModal({
     )
   }
 
-  async function handleDownload() {
+  function handleDownload() {
     const pf: Proforma = {
       ...proforma,
       number: draft.invoiceNumber,
@@ -88,7 +88,7 @@ export function InvoicePreviewModal({
       country: draft.billToCountry,
       phone: draft.billToPhone,
     }
-    await exportProformaAsInvoice(pf, cl, {
+    downloadInvoicePdf(pf, cl, {
       companyName: draft.companyName,
       footer: draft.footer,
       currency: draft.currency,
@@ -97,7 +97,11 @@ export function InvoicePreviewModal({
       invoiceNumber: draft.invoiceNumber,
       date: draft.date,
       status: draft.status,
-      filename: draft.filename.endsWith('.xlsx') ? draft.filename : `${draft.filename}.xlsx`,
+      billToName: draft.billToName,
+      billToCompany: draft.billToCompany,
+      billToCountry: draft.billToCountry,
+      billToPhone: draft.billToPhone,
+      filename: draft.filename.endsWith('.pdf') ? draft.filename : `${draft.filename}.pdf`,
     })
     onClose()
   }
@@ -107,7 +111,7 @@ export function InvoicePreviewModal({
       <header className={`flex shrink-0 items-center justify-between border-b ${ui.border} px-6 py-4`}>
         <div>
           <h2 className="text-[18px] font-semibold text-slate-900">Create invoice</h2>
-          <p className="text-[12px] text-slate-500">Review and edit before download</p>
+          <p className="text-[12px] text-slate-500">Просмотр и правка перед скачиванием PDF</p>
         </div>
         <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
           <X className="h-5 w-5" />
@@ -147,7 +151,7 @@ export function InvoicePreviewModal({
           <p className="mb-3 mt-6 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             File
           </p>
-          {field('File name', 'filename')}
+          {field('Имя файла (.pdf)', 'filename')}
         </aside>
 
         <main className="min-w-0 flex-1 overflow-auto bg-white p-8">
@@ -229,7 +233,7 @@ export function InvoicePreviewModal({
           Cancel
         </button>
         <button type="button" onClick={handleDownload} className={ui.btnPrimary}>
-          Download invoice
+          Скачать PDF
         </button>
       </footer>
     </div>
