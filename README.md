@@ -2,7 +2,14 @@
 
 Premium personal proforma management system — clients, spreadsheet-style line items, dynamic columns, Excel export, and global search.
 
-## Live site
+
+## Live site (no password)
+
+**https://akbart8.github.io/RASUL_INVOICE-2/**
+
+The app is built and pushed to the `gh-pages` branch on every push to `main`. If you see a 404, enable GitHub Pages once: Repository **Settings → Pages → Build and deployment → Deploy from branch `gh-pages` / root**.
+
+## Live site (Netlify drop)
 
 **URL:** https://cosmic-biscochitos-078323.netlify.app
 
