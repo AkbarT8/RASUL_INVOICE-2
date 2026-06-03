@@ -7,6 +7,11 @@ const base = process.env.BASE_PATH || '/'
 
 export default defineConfig({
   base,
+  define: {
+    __BUILD_SHA__: JSON.stringify(
+      process.env.VITE_BUILD_SHA || process.env.GITHUB_SHA || 'local',
+    ),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
