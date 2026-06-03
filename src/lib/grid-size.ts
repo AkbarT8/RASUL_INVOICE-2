@@ -2,7 +2,7 @@ import type { Cell, Column, Proforma, Row } from '../../shared/types'
 import { emptyCell } from './cell-format'
 import { uid } from './utils'
 
-export const GRID_MIN_ROWS = 200
+export const GRID_MIN_ROWS = 1000
 export const GRID_MIN_COLS = 26
 
 export function ensureGridSize(

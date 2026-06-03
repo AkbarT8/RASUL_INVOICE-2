@@ -46,6 +46,7 @@ export function FormatToolbar({
 
   return (
     <div
+      data-keep-selection
       className={`flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-violet-50/80 px-3 py-1.5`}
     >
       <span className="mr-1 text-[11px] font-medium text-violet-800">{selectionLabel}</span>

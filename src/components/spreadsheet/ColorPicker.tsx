@@ -16,6 +16,7 @@ export function ColorPicker({
 
   return (
     <div
+      data-keep-selection
       className={`z-50 w-[200px] p-2 ${ui.card}`}
       onClick={(e) => e.stopPropagation()}
     >

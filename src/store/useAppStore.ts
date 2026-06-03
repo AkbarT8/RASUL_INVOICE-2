@@ -16,7 +16,7 @@ import type { SearchResult } from '../../shared/types'
 
 const DEFAULT_SETTINGS: AppStore['settings'] = {
   defaultStatus: 'Draft',
-  defaultColumnWidth: 120,
+  defaultColumnWidth: 168,
   compactTable: false,
   confirmDeletes: true,
   proformaPrefix: 'PF-',

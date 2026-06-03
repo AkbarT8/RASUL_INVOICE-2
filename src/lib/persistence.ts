@@ -9,7 +9,7 @@ const DEFAULT_STORE: AppStore = {
   proformas: [],
   settings: {
     defaultStatus: 'Draft',
-    defaultColumnWidth: 120,
+    defaultColumnWidth: 168,
     compactTable: false,
     confirmDeletes: true,
     proformaPrefix: 'PF-',

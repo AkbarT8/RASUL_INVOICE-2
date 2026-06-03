@@ -151,6 +151,7 @@ function SortableRow({
   onUpdateCell,
   onCellMouseDown,
   onCellMouseEnter,
+  getColWidth,
 }: {
   row: Row
   columns: Column[]
@@ -164,6 +165,7 @@ function SortableRow({
   onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
   onCellMouseDown: (rowId: string, colId: string, e: React.MouseEvent) => void
   onCellMouseEnter: (rowId: string, colId: string) => void
+  getColWidth: (colId: string, fallback: number) => number
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -217,7 +219,10 @@ function SortableRow({
           <td
             key={col.id}
             className="p-0 align-top"
-            style={{ width: col.width, maxWidth: col.width }}
+            style={{
+              width: getColWidth(col.id, col.width),
+              maxWidth: getColWidth(col.id, col.width),
+            }}
             rowSpan={span?.rowSpan}
             colSpan={span?.colSpan}
           >
@@ -245,7 +250,8 @@ function SortableColumnHeader({
   selected,
   onMouseDown,
   onMouseEnter,
-  onResize,
+  onResizePreview,
+  onResizeCommit,
 }: {
   column: Column
   letter: string
@@ -254,7 +260,8 @@ function SortableColumnHeader({
   selected: boolean
   onMouseDown: (e: React.MouseEvent) => void
   onMouseEnter: () => void
-  onResize: (width: number) => void
+  onResizePreview: (width: number) => void
+  onResizeCommit: (width: number) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: column.id,
@@ -298,12 +305,19 @@ function SortableColumnHeader({
           e.preventDefault()
           e.stopPropagation()
           const startX = e.clientX
-          const startW = column.width
-          const onMove = (ev: MouseEvent) =>
-            onResize(Math.max(48, Math.min(480, startW + ev.clientX - startX)))
+          const startW = headerWidth ?? column.width
+          let lastW = startW
+          let raf = 0
+          const onMove = (ev: MouseEvent) => {
+            lastW = Math.max(56, Math.min(640, startW + ev.clientX - startX))
+            cancelAnimationFrame(raf)
+            raf = requestAnimationFrame(() => onResizePreview(lastW))
+          }
           const onUp = () => {
+            cancelAnimationFrame(raf)
             window.removeEventListener('mousemove', onMove)
             window.removeEventListener('mouseup', onUp)
+            onResizeCommit(lastW)
           }
           window.addEventListener('mousemove', onMove)
           window.addEventListener('mouseup', onUp)
@@ -334,6 +348,7 @@ export function Spreadsheet({
   >(null)
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
+  const [liveColWidths, setLiveColWidths] = useState<Record<string, number>>({})
   const cellAnchor = useRef<string | null>(null)
   const dragSelect = useRef(false)
   const rowDragSelect = useRef(false)
@@ -351,6 +366,31 @@ export function Spreadsheet({
     (partial: Partial<Proforma>) => onChange({ ...proforma, ...partial }),
     [proforma, onChange],
   )
+
+  const colWidth = useCallback(
+    (colId: string, fallback: number) => liveColWidths[colId] ?? fallback,
+    [liveColWidths],
+  )
+
+  const commitColumnWidth = useCallback(
+    (colId: string, width: number) => {
+      setLiveColWidths((prev) => {
+        const next = { ...prev }
+        delete next[colId]
+        return next
+      })
+      patch({
+        columns: proforma.columns.map((c) =>
+          c.id === colId ? { ...c, width } : c,
+        ),
+      })
+    },
+    [proforma.columns, patch],
+  )
+
+  const previewColumnWidth = useCallback((colId: string, width: number) => {
+    setLiveColWidths((prev) => ({ ...prev, [colId]: width }))
+  }, [])
 
   useEffect(() => {
     if (
@@ -713,16 +753,16 @@ export function Spreadsheet({
     <div
       className="flex h-full flex-col bg-white"
       onMouseDown={(e) => {
-        if (!(e.target as HTMLElement).closest('table')) clearAllSelection()
+        const el = e.target as HTMLElement
+        if (el.closest('table')) return
+        if (el.closest('[data-keep-selection]')) return
+        clearAllSelection()
       }}
     >
       <div
+        data-keep-selection
         className={`flex shrink-0 flex-wrap items-center gap-2 border-b ${ui.border} bg-slate-50/80 px-3 py-2`}
       >
-        <span className="text-[11px] text-slate-500">
-          {GRID_MIN_ROWS}×{GRID_MIN_COLS} · Ctrl+V в выбранные колонки
-        </span>
-
         {rowIds.length > 0 && (
           <>
             <button type="button" onClick={() => duplicateRows(rowIds)} className={ui.btnSecondary + ' py-1.5 text-[11px]'}>
@@ -872,17 +912,12 @@ export function Spreadsheet({
                         column={col}
                         letter={layout.letter}
                         colSpan={layout.colSpan}
-                        headerWidth={layout.width}
+                        headerWidth={colWidth(col.id, layout.width)}
                         selected={selectedCols.has(col.id)}
                         onMouseDown={(e) => selectCol(col.id, e)}
                         onMouseEnter={() => onColHeaderEnter(col.id)}
-                        onResize={(width) =>
-                          patch({
-                            columns: proforma.columns.map((c) =>
-                              c.id === col.id ? { ...c, width } : c,
-                            ),
-                          })
-                        }
+                        onResizePreview={(width) => previewColumnWidth(col.id, width)}
+                        onResizeCommit={(width) => commitColumnWidth(col.id, width)}
                       />
                     )
                   })}
@@ -907,6 +942,7 @@ export function Spreadsheet({
                       onUpdateCell={updateCell}
                       onCellMouseDown={onCellMouseDown}
                       onCellMouseEnter={onCellMouseEnter}
+                      getColWidth={colWidth}
                     />
                   ))}
                 </tbody>
