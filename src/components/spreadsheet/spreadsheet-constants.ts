@@ -1,13 +1,6 @@
-import type { CellColor, CellType } from '../../../shared/types'
-import { cellColorClass } from '../../lib/theme'
+/** Bumped when spreadsheet UX changes — visible in UI to confirm deploy. */
+export const SPREADSHEET_BUILD_TAG = '2026.06.03-v7'
 
-export const COLOR_OPTIONS: { id: NonNullable<CellColor>; class: string }[] = [
-  { id: 'green', class: cellColorClass.green },
-  { id: 'red', class: cellColorClass.red },
-  { id: 'yellow', class: cellColorClass.yellow },
-  { id: 'blue', class: cellColorClass.blue },
-  { id: 'orange', class: cellColorClass.orange },
-  { id: 'purple', class: cellColorClass.purple },
-]
-
-export const CELL_TYPES: CellType[] = ['text', 'number', 'date', 'status', 'notes']
+export const ROW_HEIGHT_PX = 34
+export const ROW_HEIGHT_COMPACT_PX = 28
+export const VIRTUAL_OVERSCAN = 10

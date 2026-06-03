@@ -49,6 +49,12 @@ import {
 import { DownloadNameModal } from './DownloadNameModal'
 import { InvoicePreviewModal } from './InvoicePreviewModal'
 import { FormatToolbar } from './FormatToolbar'
+import {
+  ROW_HEIGHT_COMPACT_PX,
+  ROW_HEIGHT_PX,
+  SPREADSHEET_BUILD_TAG,
+  VIRTUAL_OVERSCAN,
+} from './spreadsheet-constants'
 import { getColumnHeaderLayout, getMergedColumnGroup } from '../../lib/column-header-merge'
 import { ensureGridSize, GRID_MIN_COLS, GRID_MIN_ROWS } from '../../lib/grid-size'
 import { applyPasteUpdates, buildPasteUpdates } from '../../lib/paste-columns'
@@ -349,6 +355,9 @@ export function Spreadsheet({
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
   const [liveColWidths, setLiveColWidths] = useState<Record<string, number>>({})
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(720)
   const cellAnchor = useRef<string | null>(null)
   const dragSelect = useRef(false)
   const rowDragSelect = useRef(false)
@@ -356,6 +365,35 @@ export function Spreadsheet({
 
   const columns = useMemo(() => getVisibleColumns(proforma.columns), [proforma.columns])
   const rows = useMemo(() => getSortedRows(proforma.rows), [proforma.rows])
+
+  const rowHeightPx = compact ? ROW_HEIGHT_COMPACT_PX : ROW_HEIGHT_PX
+
+  const virtualRange = useMemo(() => {
+    const start = Math.max(
+      0,
+      Math.floor(scrollTop / rowHeightPx) - VIRTUAL_OVERSCAN,
+    )
+    const end = Math.min(
+      rows.length,
+      Math.ceil((scrollTop + viewportHeight) / rowHeightPx) + VIRTUAL_OVERSCAN,
+    )
+    return { start, end, topPad: start * rowHeightPx, bottomPad: (rows.length - end) * rowHeightPx }
+  }, [scrollTop, viewportHeight, rowHeightPx, rows.length])
+
+  const visibleRows = useMemo(
+    () => rows.slice(virtualRange.start, virtualRange.end),
+    [rows, virtualRange.start, virtualRange.end],
+  )
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const measure = () => setViewportHeight(el.clientHeight || 720)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -791,7 +829,10 @@ export function Spreadsheet({
           </>
         )}
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <span className="ml-auto text-[10px] text-slate-400" title="Версия сборки">
+          {SPREADSHEET_BUILD_TAG}
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
           {client && (
             <button
               type="button"
@@ -887,7 +928,11 @@ export function Spreadsheet({
         />
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto"
+        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      >
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
           <table className={cn('border-collapse text-[12px]', showGridLines && 'border border-slate-200')} style={{ tableLayout: 'fixed' }}>
             <thead className="sticky top-0 z-20">
@@ -925,9 +970,20 @@ export function Spreadsheet({
               </tr>
             </thead>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onRowDragEnd}>
-              <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext
+                items={visibleRows.map((r) => r.id)}
+                strategy={verticalListSortingStrategy}
+              >
                 <tbody>
-                  {rows.map((row, rowIndex) => (
+                  {virtualRange.topPad > 0 && (
+                    <tr aria-hidden>
+                      <td
+                        colSpan={columns.length + 1}
+                        style={{ height: virtualRange.topPad, padding: 0, border: 'none' }}
+                      />
+                    </tr>
+                  )}
+                  {visibleRows.map((row, i) => (
                     <SortableRow
                       key={row.id}
                       row={row}
@@ -936,7 +992,7 @@ export function Spreadsheet({
                       selected={selectedRows.has(row.id)}
                       selectedCells={selectedCells}
                       compact={compact}
-                      rowNumber={rowIndex + 1}
+                      rowNumber={virtualRange.start + i + 1}
                       onSelect={selectRow}
                       onRowHeaderEnter={() => onRowHeaderEnter(row.id)}
                       onUpdateCell={updateCell}
@@ -945,6 +1001,14 @@ export function Spreadsheet({
                       getColWidth={colWidth}
                     />
                   ))}
+                  {virtualRange.bottomPad > 0 && (
+                    <tr aria-hidden>
+                      <td
+                        colSpan={columns.length + 1}
+                        style={{ height: virtualRange.bottomPad, padding: 0, border: 'none' }}
+                      />
+                    </tr>
+                  )}
                 </tbody>
               </SortableContext>
             </DndContext>
