@@ -1,15 +1,23 @@
 import { create } from 'zustand'
-import type { AppStore, Client, Proforma } from '../../shared/types'
+import type { AppStore, Client, Column, Proforma } from '../../shared/types'
 import { api } from '../lib/api'
 import { uid } from '../lib/utils'
 import {
   getClientCredentials,
   loadLocalStore,
+  saveClientCredentials,
   saveLocalStore,
   isServerApiEnabled,
 } from '../lib/persistence'
 import { searchStore } from '../lib/search'
 import type { SearchResult } from '../../shared/types'
+
+const DEFAULT_SETTINGS: AppStore['settings'] = {
+  defaultStatus: 'Draft',
+  defaultColumnWidth: 120,
+  compactTable: false,
+  confirmDeletes: true,
+}
 
 interface AppState {
   loaded: boolean
@@ -26,6 +34,11 @@ interface AppState {
   persist: () => Promise<void>
   search: (q: string) => Promise<SearchResult[]>
   updateStore: (updater: (store: AppStore) => AppStore) => void
+  updateCredentials: (input: {
+    username: string
+    newPassword?: string
+    currentPassword: string
+  }) => void
   addClient: (data: Omit<Client, 'id' | 'createdAt'>) => Client
   updateClient: (id: string, data: Partial<Client>) => void
   deleteClient: (id: string) => void
@@ -37,11 +50,19 @@ interface AppState {
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 const SESSION_KEY = 'proforma_session_user'
 
+function defaultColumns(width: number): Column[] {
+  return [
+    { id: uid('col'), name: 'Article', width, hidden: false, order: 0, color: null },
+    { id: uid('col'), name: 'Quantity', width: Math.min(width, 96), hidden: false, order: 1, color: null },
+    { id: uid('col'), name: 'Price', width: Math.min(width, 96), hidden: false, order: 2, color: null },
+  ]
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   loaded: false,
   saving: false,
   username: null,
-  store: { clients: [], proformas: [], settings: { defaultStatus: 'Draft' } },
+  store: { clients: [], proformas: [], settings: DEFAULT_SETTINGS },
   selectedClientId: null,
   selectedProformaId: null,
 
@@ -53,7 +74,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         const me = await api.me()
         const store = await api.getData()
-        set({ username: me.username, store, loaded: true })
+        set({
+          username: me.username,
+          store: { ...store, settings: { ...DEFAULT_SETTINGS, ...store.settings } },
+          loaded: true,
+        })
         return true
       } catch {
         set({ loaded: true })
@@ -63,7 +88,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const username = sessionStorage.getItem(SESSION_KEY)
     if (username) {
-      set({ username, store: loadLocalStore(), loaded: true })
+      const store = loadLocalStore()
+      set({ username, store, loaded: true })
       return true
     }
     set({ loaded: true })
@@ -94,10 +120,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set({
       username: null,
-      store: { clients: [], proformas: [], settings: { defaultStatus: 'Draft' } },
+      store: { clients: [], proformas: [], settings: DEFAULT_SETTINGS },
       selectedClientId: null,
       selectedProformaId: null,
     })
+  },
+
+  updateCredentials: ({ username, newPassword, currentPassword }) => {
+    const creds = getClientCredentials()
+    if (currentPassword !== creds.password) {
+      throw new Error('Current password is incorrect')
+    }
+    const next = {
+      username,
+      password: newPassword && newPassword.length > 0 ? newPassword : creds.password,
+    }
+    saveClientCredentials(next)
+    sessionStorage.setItem(SESSION_KEY, username)
+    set({ username })
   },
 
   persist: async () => {
@@ -154,6 +194,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addProforma: (clientId) => {
     const count = get().store.proformas.filter((p) => p.clientId === clientId).length
+    const w = get().store.settings.defaultColumnWidth
     const proforma: Proforma = {
       id: uid('pf'),
       clientId,
@@ -161,11 +202,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       date: new Date().toISOString().slice(0, 10),
       status: get().store.settings.defaultStatus,
       notes: '',
-      columns: [
-        { id: uid('col'), name: 'Article', width: 180, hidden: false, order: 0 },
-        { id: uid('col'), name: 'Quantity', width: 100, hidden: false, order: 1 },
-        { id: uid('col'), name: 'Price', width: 100, hidden: false, order: 2 },
-      ],
+      columns: defaultColumns(w),
       rows: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

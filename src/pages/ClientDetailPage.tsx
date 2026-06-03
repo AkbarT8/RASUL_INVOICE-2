@@ -18,8 +18,8 @@ export function ClientDetailPage() {
   if (!client) {
     return (
       <div className="p-6">
-        <p className="text-[#71717a]">Client not found.</p>
-        <Link to="/clients" className="mt-2 text-violet-400">
+        <p className="text-[text-slate-500]">Client not found.</p>
+        <Link to="/clients" className="mt-2 text-violet-600">
           Back to clients
         </Link>
       </div>
@@ -34,10 +34,10 @@ export function ClientDetailPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-[#1f1f27] px-6 py-4">
+      <header className="shrink-0 border-b border-[slate-200] px-6 py-4">
         <Link
           to="/clients"
-          className="mb-3 inline-flex items-center gap-1 text-[12px] text-[#71717a] hover:text-white"
+          className="mb-3 inline-flex items-center gap-1 text-[12px] text-[text-slate-500] hover:text-slate-900"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
           Clients
@@ -58,7 +58,7 @@ export function ClientDetailPage() {
                 ] as const
               ).map(([field, label]) => (
                 <div key={field}>
-                  <label className="text-[10px] uppercase tracking-wide text-[#52525b]">
+                  <label className="text-[10px] uppercase tracking-wide text-[text-slate-400]">
                     {label}
                   </label>
                   <input
@@ -66,7 +66,7 @@ export function ClientDetailPage() {
                     onChange={(e) =>
                       updateClient(client.id, { [field]: e.target.value })
                     }
-                    className="mt-0.5 w-full rounded border border-transparent bg-[#0f0f12] px-2 py-1.5 text-[13px] outline-none focus:border-[#3f3f46]"
+                    className="mt-0.5 w-full rounded border border-transparent bg-[white] px-2 py-1.5 text-[13px] outline-none focus:border-[#3f3f46]"
                   />
                 </div>
               ))}
@@ -76,7 +76,7 @@ export function ClientDetailPage() {
               onChange={(e) => updateClient(client.id, { notes: e.target.value })}
               placeholder="Notes"
               rows={2}
-              className="mt-2 w-full resize-none rounded-lg border border-[#1f1f27] bg-[#0f0f12] px-3 py-2 text-[13px] outline-none focus:border-[#3f3f46]"
+              className="mt-2 w-full resize-none rounded-lg border border-[slate-200] bg-[white] px-3 py-2 text-[13px] outline-none focus:border-[#3f3f46]"
             />
           </div>
           <button
@@ -96,11 +96,11 @@ export function ClientDetailPage() {
 
       <div className="flex-1 overflow-auto p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-[13px] font-medium text-[#a1a1aa]">Proformas</h3>
+          <h3 className="text-[13px] font-medium text-[text-slate-600]">Proformas</h3>
           <button
             type="button"
             onClick={handleNewProforma}
-            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-[12px] text-white hover:bg-violet-500"
+            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-[12px] text-slate-900 hover:bg-violet-500"
           >
             <Plus className="h-3.5 w-3.5" />
             New proforma
@@ -108,7 +108,7 @@ export function ClientDetailPage() {
         </div>
 
         {proformas.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#27272f] py-16 text-[#52525b]">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[slate-200] py-16 text-[text-slate-400]">
             <FileSpreadsheet className="mb-2 h-8 w-8 opacity-40" />
             <p>No proformas in this folder yet.</p>
           </div>
@@ -117,16 +117,16 @@ export function ClientDetailPage() {
             {proformas.map((pf) => (
               <div
                 key={pf.id}
-                className="group flex items-center justify-between rounded-xl border border-[#1f1f27] bg-[#0c0c0f] px-4 py-3 transition hover:border-[#3f3f46]"
+                className="group flex items-center justify-between rounded-xl border border-[slate-200] bg-[white] px-4 py-3 transition hover:border-[#3f3f46]"
               >
                 <Link
                   to={`/clients/${client.id}/proformas/${pf.id}`}
                   className="min-w-0 flex-1"
                 >
-                  <p className="font-medium text-white group-hover:text-violet-300">
+                  <p className="font-medium text-slate-900 group-hover:text-violet-700">
                     {pf.number}
                   </p>
-                  <p className="text-[11px] text-[#52525b]">
+                  <p className="text-[11px] text-[text-slate-400]">
                     {formatDate(pf.date)} · {pf.status} · {pf.rows.length} rows
                   </p>
                 </Link>
@@ -135,7 +135,7 @@ export function ClientDetailPage() {
                   onClick={() => {
                     if (confirm('Delete this proforma?')) deleteProforma(pf.id)
                   }}
-                  className="rounded p-1.5 text-[#52525b] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                  className="rounded p-1.5 text-[text-slate-400] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

@@ -20,6 +20,7 @@ export interface Column {
   width: number
   hidden: boolean
   order: number
+  color: CellColor
 }
 
 export interface Row {
@@ -53,6 +54,9 @@ export interface Client {
 
 export interface AppSettings {
   defaultStatus: string
+  defaultColumnWidth: number
+  compactTable: boolean
+  confirmDeletes: boolean
 }
 
 export interface AppStore {

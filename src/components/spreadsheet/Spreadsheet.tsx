@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -20,168 +20,128 @@ import {
   Copy,
   Download,
   EyeOff,
+  FilePlus,
   GripVertical,
   Plus,
   Trash2,
   Palette,
 } from 'lucide-react'
-import type {
-  Cell,
-  CellColor,
-  CellType,
-  Column,
-  Proforma,
-  Row,
-} from '../../../shared/types'
+import type { Cell, CellColor, CellType, Column, Proforma, Row } from '../../../shared/types'
 import { cn, uid } from '../../lib/utils'
 import { exportProformaToExcel, getSortedRows, getVisibleColumns } from '../../lib/excel'
-
-const COLORS: { id: CellColor; class: string }[] = [
-  { id: 'green', class: 'bg-emerald-500/20' },
-  { id: 'red', class: 'bg-red-500/20' },
-  { id: 'yellow', class: 'bg-yellow-500/20' },
-  { id: 'blue', class: 'bg-blue-500/20' },
-  { id: 'orange', class: 'bg-orange-500/20' },
-  { id: 'purple', class: 'bg-purple-500/20' },
-]
-
-const CELL_TYPES: CellType[] = ['text', 'number', 'date', 'status', 'notes']
-
-interface SpreadsheetProps {
-  proforma: Proforma
-  onChange: (proforma: Proforma) => void
-}
+import { cellColorClass, ui } from '../../lib/theme'
+import { COLOR_OPTIONS, CELL_TYPES } from './spreadsheet-constants'
 
 function emptyCell(): Cell {
   return { value: '', type: 'text', color: null }
 }
 
-function SortableRow({
-  row,
-  columns,
-  selected,
-  onSelect,
-  onUpdateCell,
-  onContext,
+function clampCount(n: number) {
+  return Math.max(1, Math.min(200, Math.floor(n) || 1))
+}
+
+interface SpreadsheetProps {
+  proforma: Proforma
+  onChange: (proforma: Proforma) => void
+  compact?: boolean
+  confirmDeletes?: boolean
+  defaultColumnWidth?: number
+  onCreateProforma?: () => void
+}
+
+function CountButton({
+  label,
+  count,
+  onCountChange,
+  onAction,
 }: {
-  row: Row
-  columns: Column[]
-  selected: boolean
-  onSelect: (id: string, multi: boolean) => void
-  onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
-  onContext: (rowId: string, e: React.MouseEvent) => void
+  label: string
+  count: number
+  onCountChange: (n: number) => void
+  onAction: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: row.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
   return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'group border-t border-[#1f1f27]',
-        selected && 'bg-violet-500/5',
-      )}
-      onContextMenu={(e) => onContext(row.id, e)}
-    >
-      <td className="w-8 px-1 py-0">
-        <div className="flex items-center gap-0.5">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={(e) => onSelect(row.id, (e.nativeEvent as MouseEvent).shiftKey)}
-            className="rounded border-[#3f3f46]"
-          />
-          <button
-            type="button"
-            className="cursor-grab text-[#52525b] opacity-0 group-hover:opacity-100"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </td>
-      {columns.map((col) => {
-        const cell = row.cells[col.id] || emptyCell()
-        return (
-          <td key={col.id} className="p-0" style={{ minWidth: col.width }}>
-            <CellEditor
-              cell={cell}
-              colorClass={COLORS.find((c) => c.id === cell.color)?.class}
-              onChange={(next) => onUpdateCell(row.id, col.id, next)}
-            />
-          </td>
-        )
-      })}
-    </tr>
+    <div className="flex items-center overflow-hidden rounded-md border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={onAction}
+        className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50"
+      >
+        <Plus className="h-3 w-3" />
+        {label}
+      </button>
+      <input
+        type="number"
+        min={1}
+        max={200}
+        value={count}
+        onChange={(e) => onCountChange(Number(e.target.value))}
+        className="w-10 border-l border-slate-200 bg-slate-50 px-1 py-1.5 text-center text-[11px] outline-none"
+        title={`Number of ${label}s to add`}
+      />
+    </div>
   )
 }
 
 function CellEditor({
   cell,
   colorClass,
+  compact,
   onChange,
 }: {
   cell: Cell
   colorClass?: string
+  compact?: boolean
   onChange: (cell: Cell) => void
 }) {
   const [menu, setMenu] = useState(false)
+  const h = compact ? 'min-h-[28px]' : 'min-h-[34px]'
 
   return (
-    <div
-      className={cn(
-        'relative min-h-[32px] border-r border-[#1f1f27]',
-        colorClass,
-      )}
-    >
+    <div className={cn('group/cell relative border-r border-slate-200', h, colorClass)}>
       {cell.type === 'notes' ? (
         <textarea
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          rows={2}
-          className="w-full resize-none bg-transparent px-2 py-1.5 text-[12px] outline-none"
+          rows={compact ? 1 : 2}
+          className="w-full resize-none bg-transparent px-2 py-1 text-[12px] outline-none"
         />
       ) : cell.type === 'date' ? (
         <input
           type="date"
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          className="w-full bg-transparent px-2 py-1.5 text-[12px] outline-none"
+          className="w-full bg-transparent px-2 py-1 text-[12px] outline-none"
         />
       ) : cell.type === 'number' ? (
         <input
           type="number"
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          className="w-full bg-transparent px-2 py-1.5 text-[12px] tabular-nums outline-none"
+          className="w-full bg-transparent px-2 py-1 text-[12px] tabular-nums outline-none"
         />
       ) : (
         <input
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          className="w-full bg-transparent px-2 py-1.5 text-[12px] outline-none"
+          className="w-full bg-transparent px-2 py-1 text-[12px] outline-none"
         />
       )}
       <button
         type="button"
         onClick={() => setMenu(!menu)}
-        className="absolute right-0 top-0 p-1 text-[#52525b] opacity-0 hover:text-white focus:opacity-100 group-hover:opacity-60"
+        className="absolute right-0.5 top-0.5 rounded p-0.5 text-slate-400 opacity-0 hover:bg-white hover:text-slate-700 group-hover/cell:opacity-100"
       >
         <Palette className="h-3 w-3" />
       </button>
       {menu && (
-        <div className="absolute right-0 top-full z-30 rounded-lg border border-[#27272f] bg-[#141419] p-2 shadow-xl">
-          <p className="mb-1 text-[10px] text-[#52525b]">Color</p>
-          <div className="mb-2 flex gap-1">
-            {COLORS.map((c) => (
+        <div
+          className={`absolute right-0 top-full z-50 mt-0.5 p-2 shadow-lg ${ui.card}`}
+          onMouseLeave={() => setMenu(false)}
+        >
+          <p className="mb-1 text-[10px] text-slate-400">Color</p>
+          <div className="mb-2 flex flex-wrap gap-1">
+            {COLOR_OPTIONS.map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -189,7 +149,7 @@ function CellEditor({
                   onChange({ ...cell, color: c.id })
                   setMenu(false)
                 }}
-                className={cn('h-4 w-4 rounded', c.class, 'ring-1 ring-white/10')}
+                className={cn('h-5 w-5 rounded border border-slate-200', c.class)}
               />
             ))}
             <button
@@ -198,18 +158,15 @@ function CellEditor({
                 onChange({ ...cell, color: null })
                 setMenu(false)
               }}
-              className="px-1 text-[10px] text-[#71717a]"
+              className="px-1 text-[10px] text-slate-500"
             >
               Clear
             </button>
           </div>
-          <p className="mb-1 text-[10px] text-[#52525b]">Type</p>
           <select
             value={cell.type}
-            onChange={(e) =>
-              onChange({ ...cell, type: e.target.value as CellType })
-            }
-            className="w-full rounded border border-[#27272f] bg-[#09090b] px-1 py-0.5 text-[11px]"
+            onChange={(e) => onChange({ ...cell, type: e.target.value as CellType })}
+            className="w-full rounded border border-slate-200 px-1 py-0.5 text-[11px]"
           >
             {CELL_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -223,22 +180,99 @@ function CellEditor({
   )
 }
 
+function SortableRow({
+  row,
+  columns,
+  selected,
+  compact,
+  onSelect,
+  onUpdateCell,
+}: {
+  row: Row
+  columns: Column[]
+  selected: boolean
+  compact?: boolean
+  onSelect: (id: string, multi: boolean) => void
+  onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: row.id })
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className={cn('group border-t border-slate-200', selected && 'bg-violet-50/80')}
+    >
+      <td className="sticky left-0 z-10 w-10 border-r border-slate-200 bg-white px-1 py-0">
+        <div className="flex items-center gap-0.5">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(e) => onSelect(row.id, (e.nativeEvent as MouseEvent).shiftKey)}
+            className="rounded border-slate-300"
+          />
+          <button
+            type="button"
+            className="cursor-grab text-slate-400 opacity-0 group-hover:opacity-100"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </td>
+      {columns.map((col) => {
+        const cell = row.cells[col.id] || emptyCell()
+        const colBg = col.color ? cellColorClass[col.color] : undefined
+        const cellBg = cell.color ? cellColorClass[cell.color] : colBg
+        return (
+          <td
+            key={col.id}
+            className="p-0 align-top"
+            style={{ width: col.width, maxWidth: col.width }}
+          >
+            <CellEditor
+              cell={cell}
+              colorClass={cellBg}
+              compact={compact}
+              onChange={(next) => onUpdateCell(row.id, col.id, next)}
+            />
+          </td>
+        )
+      })}
+    </tr>
+  )
+}
+
 function SortableHeader({
   column,
+  selected,
+  onSelect,
   onRename,
   onResize,
+  onColor,
   onHide,
   onDelete,
 }: {
   column: Column
+  selected: boolean
+  onSelect: (id: string, multi: boolean) => void
   onRename: (name: string) => void
   onResize: (width: number) => void
+  onColor: (color: CellColor) => void
   onHide: () => void
   onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: column.id,
   })
+  const [colorOpen, setColorOpen] = useState(false)
+  const headerBg = column.color ? cellColorClass[column.color] : 'bg-slate-50'
 
   return (
     <th
@@ -247,14 +281,24 @@ function SortableHeader({
         transform: CSS.Transform.toString(transform),
         transition,
         width: column.width,
-        minWidth: column.width,
+        maxWidth: column.width,
       }}
-      className="group relative border-r border-[#1f1f27] bg-[#0c0c0f] px-0 py-0 text-left"
+      className={cn(
+        'group relative border-r border-slate-200 p-0 text-left',
+        headerBg,
+        selected && 'ring-2 ring-inset ring-violet-400',
+      )}
     >
-      <div className="flex items-center gap-1 px-2 py-2">
+      <div className="flex items-center gap-0.5 px-1 py-1.5">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => onSelect(column.id, (e.nativeEvent as MouseEvent).shiftKey)}
+          className="shrink-0 rounded border-slate-300"
+        />
         <button
           type="button"
-          className="cursor-grab text-[#52525b] opacity-0 group-hover:opacity-100"
+          className="cursor-grab shrink-0 text-slate-400 opacity-0 group-hover:opacity-100"
           {...attributes}
           {...listeners}
         >
@@ -263,32 +307,56 @@ function SortableHeader({
         <input
           value={column.name}
           onChange={(e) => onRename(e.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-[11px] font-medium uppercase tracking-wide text-[#a1a1aa] outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[10px] font-semibold uppercase tracking-wide text-slate-600 outline-none"
         />
-        <button
-          type="button"
-          onClick={onHide}
-          className="text-[#52525b] opacity-0 hover:text-white group-hover:opacity-100"
-        >
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setColorOpen(!colorOpen)}
+            className="rounded p-0.5 text-slate-400 hover:text-slate-700"
+          >
+            <Palette className="h-3 w-3" />
+          </button>
+          {colorOpen && (
+            <div className={`absolute right-0 top-full z-50 mt-1 flex gap-1 p-1.5 ${ui.card}`}>
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    onColor(c.id)
+                    setColorOpen(false)
+                  }}
+                  className={cn('h-4 w-4 rounded border border-slate-200', c.class)}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  onColor(null)
+                  setColorOpen(false)
+                }}
+                className="px-1 text-[9px] text-slate-500"
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </div>
+        <button type="button" onClick={onHide} className="shrink-0 text-slate-400 hover:text-slate-600">
           <EyeOff className="h-3 w-3" />
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="text-[#52525b] opacity-0 hover:text-red-400 group-hover:opacity-100"
-        >
+        <button type="button" onClick={onDelete} className="shrink-0 text-slate-400 hover:text-red-500">
           <Trash2 className="h-3 w-3" />
         </button>
       </div>
       <div
-        className="absolute bottom-0 right-0 top-0 w-1 cursor-col-resize hover:bg-violet-500/50"
+        className="absolute bottom-0 right-0 top-0 w-1.5 cursor-col-resize hover:bg-violet-400/60"
         onMouseDown={(e) => {
           e.preventDefault()
           const startX = e.clientX
           const startW = column.width
-          const onMove = (ev: MouseEvent) => {
-            onResize(Math.max(60, startW + ev.clientX - startX))
-          }
+          const onMove = (ev: MouseEvent) => onResize(Math.max(48, Math.min(480, startW + ev.clientX - startX)))
           const onUp = () => {
             window.removeEventListener('mousemove', onMove)
             window.removeEventListener('mouseup', onUp)
@@ -301,14 +369,22 @@ function SortableHeader({
   )
 }
 
-export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
+export function Spreadsheet({
+  proforma,
+  onChange,
+  compact,
+  confirmDeletes = true,
+  defaultColumnWidth = 120,
+  onCreateProforma,
+}: SpreadsheetProps) {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [selectedCols, setSelectedCols] = useState<Set<string>>(new Set())
   const [showExport, setShowExport] = useState(false)
+  const [rowCount, setRowCount] = useState(1)
+  const [colCount, setColCount] = useState(1)
+  const lastColClick = useRef<string | null>(null)
 
-  const columns = useMemo(
-    () => getVisibleColumns(proforma.columns),
-    [proforma.columns],
-  )
+  const columns = useMemo(() => getVisibleColumns(proforma.columns), [proforma.columns])
   const rows = useMemo(() => getSortedRows(proforma.rows), [proforma.rows])
 
   const sensors = useSensors(
@@ -321,19 +397,71 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
     [proforma, onChange],
   )
 
-  function addRow() {
-    const order = proforma.rows.length
-    const cells: Record<string, Cell> = {}
-    proforma.columns.forEach((col) => {
-      cells[col.id] = emptyCell()
+  function confirm(msg: string) {
+    if (!confirmDeletes) return true
+    return window.confirm(msg)
+  }
+
+  function addRows(n = rowCount) {
+    const count = clampCount(n)
+    const base = proforma.rows.length
+    const newRows: Row[] = []
+    for (let i = 0; i < count; i++) {
+      const cells: Record<string, Cell> = {}
+      proforma.columns.forEach((col) => {
+        cells[col.id] = emptyCell()
+      })
+      newRows.push({ id: uid('row'), cells, order: base + i })
+    }
+    patch({ rows: [...proforma.rows, ...newRows] })
+  }
+
+  function addColumns(n = colCount) {
+    const count = clampCount(n)
+    const start = proforma.columns.length
+    const newCols: Column[] = []
+    for (let i = 0; i < count; i++) {
+      const col: Column = {
+        id: uid('col'),
+        name: `Column ${start + i + 1}`,
+        width: defaultColumnWidth,
+        hidden: false,
+        order: start + i,
+        color: null,
+      }
+      newCols.push(col)
+    }
+    patch({
+      columns: [...proforma.columns, ...newCols],
+      rows: proforma.rows.map((r) => {
+        const cells = { ...r.cells }
+        newCols.forEach((c) => {
+          cells[c.id] = emptyCell()
+        })
+        return { ...r, cells }
+      }),
     })
-    const row: Row = { id: uid('row'), cells, order }
-    patch({ rows: [...proforma.rows, row] })
   }
 
   function deleteRows(ids: string[]) {
+    if (!ids.length) return
+    if (!confirm(`Delete ${ids.length} row(s)?`)) return
     patch({ rows: proforma.rows.filter((r) => !ids.includes(r.id)) })
     setSelectedRows(new Set())
+  }
+
+  function deleteColumns(ids: string[]) {
+    if (!ids.length) return
+    if (!confirm(`Delete ${ids.length} column(s)?`)) return
+    patch({
+      columns: proforma.columns.filter((c) => !ids.includes(c.id)),
+      rows: proforma.rows.map((r) => {
+        const cells = { ...r.cells }
+        ids.forEach((id) => delete cells[id])
+        return { ...r, cells }
+      }),
+    })
+    setSelectedCols(new Set())
   }
 
   function duplicateRows(ids: string[]) {
@@ -343,9 +471,7 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
       ...r,
       id: uid('row'),
       order: maxOrder + i + 1,
-      cells: Object.fromEntries(
-        Object.entries(r.cells).map(([k, v]) => [k, { ...v }]),
-      ),
+      cells: Object.fromEntries(Object.entries(r.cells).map(([k, v]) => [k, { ...v }])),
     }))
     patch({ rows: [...proforma.rows, ...copies] })
   }
@@ -358,23 +484,41 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
     })
   }
 
-  function addColumn() {
-    const order = proforma.columns.length
-    const col: Column = {
-      id: uid('col'),
-      name: 'New column',
-      width: 140,
-      hidden: false,
-      order,
-    }
-    patch({
-      columns: [...proforma.columns, col],
-      rows: proforma.rows.map((r) => ({
-        ...r,
-        cells: { ...r.cells, [col.id]: emptyCell() },
-      })),
+  function selectRow(id: string, multi: boolean) {
+    setSelectedRows((prev) => {
+      const next = new Set(multi ? prev : [])
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
   }
+
+  function selectCol(id: string, multi: boolean) {
+    setSelectedCols((prev) => {
+      let next = new Set(multi ? prev : [])
+      if (multi && lastColClick.current && columns.length) {
+        const ids = columns.map((c) => c.id)
+        const a = ids.indexOf(lastColClick.current)
+        const b = ids.indexOf(id)
+        if (a >= 0 && b >= 0) {
+          const [lo, hi] = a < b ? [a, b] : [b, a]
+          next = new Set([...next, ...ids.slice(lo, hi + 1)])
+        }
+      }
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      lastColClick.current = id
+      return next
+    })
+  }
+
+  function selectAllCols() {
+    if (selectedCols.size === columns.length) setSelectedCols(new Set())
+    else setSelectedCols(new Set(columns.map((c) => c.id)))
+  }
+
+  const rowIds = [...selectedRows]
+  const colIds = [...selectedCols]
 
   function onRowDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -386,9 +530,7 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
     const reordered = [...sorted]
     const [moved] = reordered.splice(oldIndex, 1)
     reordered.splice(newIndex, 0, moved)
-    patch({
-      rows: reordered.map((r, i) => ({ ...r, order: i })),
-    })
+    patch({ rows: reordered.map((r, i) => ({ ...r, order: i })) })
   }
 
   function onColDragEnd(event: DragEndEvent) {
@@ -410,118 +552,112 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
     })
   }
 
-  function selectRow(id: string, multi: boolean) {
-    setSelectedRows((prev) => {
-      const next = new Set(multi ? prev : [])
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const selectedIds = [...selectedRows]
-
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#1f1f27] px-3 py-2">
-        <button
-          type="button"
-          onClick={addRow}
-          className="flex items-center gap-1 rounded-md bg-[#1a1a22] px-2.5 py-1.5 text-[11px] hover:bg-[#27272f]"
-        >
-          <Plus className="h-3 w-3" /> Row
-        </button>
-        <button
-          type="button"
-          onClick={addColumn}
-          className="flex items-center gap-1 rounded-md bg-[#1a1a22] px-2.5 py-1.5 text-[11px] hover:bg-[#27272f]"
-        >
-          <Plus className="h-3 w-3" /> Column
-        </button>
-        {selectedIds.length > 0 && (
+    <div className="flex h-full flex-col bg-white">
+      <div
+        className={`flex shrink-0 flex-wrap items-center gap-2 border-b ${ui.border} bg-slate-50/80 px-3 py-2`}
+      >
+        <CountButton label="Row" count={rowCount} onCountChange={setRowCount} onAction={() => addRows()} />
+        <CountButton
+          label="Column"
+          count={colCount}
+          onCountChange={setColCount}
+          onAction={() => addColumns()}
+        />
+
+        {rowIds.length > 0 && (
           <>
-            <button
-              type="button"
-              onClick={() => duplicateRows(selectedIds)}
-              className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] text-[#a1a1aa] hover:bg-[#1a1a22]"
-            >
-              <Copy className="h-3 w-3" /> Duplicate ({selectedIds.length})
+            <button type="button" onClick={() => duplicateRows(rowIds)} className={ui.btnSecondary + ' py-1.5 text-[11px]'}>
+              <Copy className="mr-1 inline h-3 w-3" />
+              Rows ({rowIds.length})
             </button>
             <button
               type="button"
-              onClick={() => deleteRows(selectedIds)}
-              className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] text-red-400 hover:bg-red-500/10"
+              onClick={() => deleteRows(rowIds)}
+              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700 hover:bg-red-100"
             >
-              <Trash2 className="h-3 w-3" /> Delete
+              Delete rows
             </button>
           </>
         )}
-        <div className="ml-auto relative">
-          <button
-            type="button"
-            onClick={() => setShowExport(!showExport)}
-            className="flex items-center gap-1 rounded-md bg-violet-600/20 px-2.5 py-1.5 text-[11px] text-violet-300 hover:bg-violet-600/30"
-          >
-            <Download className="h-3 w-3" /> Export Excel
-          </button>
-          {showExport && (
-            <div className="absolute right-0 top-full z-40 mt-1 w-48 rounded-lg border border-[#27272f] bg-[#141419] p-1 shadow-xl">
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-[#1a1a22]"
-                onClick={() => {
-                  exportProformaToExcel(proforma)
-                  setShowExport(false)
-                }}
-              >
-                Whole table
-              </button>
-              <button
-                type="button"
-                disabled={selectedIds.length === 0}
-                className="block w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-[#1a1a22] disabled:opacity-40"
-                onClick={() => {
-                  exportProformaToExcel(proforma, { rowIds: selectedIds })
-                  setShowExport(false)
-                }}
-              >
-                Selected rows
-              </button>
-              <button
-                type="button"
-                disabled={columns.length === 0}
-                className="block w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-[#1a1a22] disabled:opacity-40"
-                onClick={() => {
-                  const colIds = columns.map((c) => c.id)
-                  exportProformaToExcel(proforma, { columnIds: colIds })
-                  setShowExport(false)
-                }}
-              >
-                Visible columns
-              </button>
-            </div>
+
+        {colIds.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => deleteColumns(colIds)}
+              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700"
+            >
+              Delete cols ({colIds.length})
+            </button>
+            <span className="text-[11px] text-slate-500">{colIds.length} column(s) selected</span>
+          </>
+        )}
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {onCreateProforma && (
+            <button type="button" onClick={onCreateProforma} className={ui.btnSecondary + ' py-1.5 text-[11px]'}>
+              <FilePlus className="mr-1 inline h-3.5 w-3.5" />
+              New proforma
+            </button>
           )}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowExport(!showExport)}
+              className={ui.btnPrimary + ' py-1.5 text-[11px]'}
+            >
+              <Download className="mr-1 inline h-3.5 w-3.5" />
+              Export Excel
+            </button>
+            {showExport && (
+              <div className={`absolute right-0 top-full z-40 mt-1 w-52 p-1 ${ui.card}`}>
+                {[
+                  ['Whole table', () => exportProformaToExcel(proforma)],
+                  ['Selected rows', () => exportProformaToExcel(proforma, { rowIds }), rowIds.length === 0],
+                  ['Selected columns', () => exportProformaToExcel(proforma, { columnIds: colIds }), colIds.length === 0],
+                  ['Visible columns', () => exportProformaToExcel(proforma, { columnIds: columns.map((c) => c.id) })],
+                ].map(([label, fn, disabled]) => (
+                  <button
+                    key={label as string}
+                    type="button"
+                    disabled={!!disabled}
+                    className="block w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50 disabled:opacity-40"
+                    onClick={() => {
+                      ;(fn as () => void)()
+                      setShowExport(false)
+                    }}
+                  >
+                    {label as string}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onColDragEnd}
-        >
-          <table className="w-max min-w-full border-collapse">
-            <thead>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
+          <table className="border-collapse text-[12px]" style={{ tableLayout: 'fixed' }}>
+            <thead className="sticky top-0 z-20">
               <tr>
-                <th className="w-8 bg-[#0c0c0f]" />
-                <SortableContext
-                  items={columns.map((c) => c.id)}
-                  strategy={horizontalListSortingStrategy}
-                >
+                <th className="sticky left-0 z-30 w-10 border-b border-r border-slate-200 bg-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={columns.length > 0 && selectedCols.size === columns.length}
+                    onChange={selectAllCols}
+                    className="m-2 rounded border-slate-300"
+                    title="Select all columns"
+                  />
+                </th>
+                <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
                   {columns.map((col) => (
                     <SortableHeader
                       key={col.id}
                       column={col}
+                      selected={selectedCols.has(col.id)}
+                      onSelect={selectCol}
                       onRename={(name) =>
                         patch({
                           columns: proforma.columns.map((c) =>
@@ -536,6 +672,13 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
                           ),
                         })
                       }
+                      onColor={(color) =>
+                        patch({
+                          columns: proforma.columns.map((c) =>
+                            c.id === col.id ? { ...c, color } : c,
+                          ),
+                        })
+                      }
                       onHide={() =>
                         patch({
                           columns: proforma.columns.map((c) =>
@@ -544,30 +687,16 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
                         })
                       }
                       onDelete={() => {
-                        if (!confirm('Delete column and its data?')) return
-                        patch({
-                          columns: proforma.columns.filter((c) => c.id !== col.id),
-                          rows: proforma.rows.map((r) => {
-                            const cells = { ...r.cells }
-                            delete cells[col.id]
-                            return { ...r, cells }
-                          }),
-                        })
+                        if (!confirm('Delete this column?')) return
+                        deleteColumns([col.id])
                       }}
                     />
                   ))}
                 </SortableContext>
               </tr>
             </thead>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={onRowDragEnd}
-            >
-              <SortableContext
-                items={rows.map((r) => r.id)}
-                strategy={verticalListSortingStrategy}
-              >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onRowDragEnd}>
+              <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {rows.map((row) => (
                     <SortableRow
@@ -575,12 +704,9 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
                       row={row}
                       columns={columns}
                       selected={selectedRows.has(row.id)}
+                      compact={compact}
                       onSelect={selectRow}
                       onUpdateCell={updateCell}
-                      onContext={(id, e) => {
-                        e.preventDefault()
-                        selectRow(id, true)
-                      }}
                     />
                   ))}
                 </tbody>
@@ -589,8 +715,8 @@ export function Spreadsheet({ proforma, onChange }: SpreadsheetProps) {
           </table>
         </DndContext>
         {rows.length === 0 && (
-          <p className="py-12 text-center text-[12px] text-[#52525b]">
-            No rows yet. Click &quot;Row&quot; to add your first line item.
+          <p className="py-12 text-center text-[12px] text-slate-400">
+            No rows yet. Set a number and click + Row.
           </p>
         )}
       </div>

@@ -38,40 +38,40 @@ export function SearchPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="border-b border-[#1f1f27] px-6 py-5">
+      <header className="border-b border-[slate-200] px-6 py-5">
         <h2 className="text-[18px] font-semibold">Search</h2>
         <div className="relative mt-4 max-w-xl">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#52525b]" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[text-slate-400]" />
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Clients, proformas, articles, notes…"
-            className="w-full rounded-lg border border-[#27272f] bg-[#0f0f12] py-2.5 pl-10 pr-4 text-[14px] outline-none focus:border-violet-500/50"
+            className="w-full rounded-lg border border-[slate-200] bg-[white] py-2.5 pl-10 pr-4 text-[14px] outline-none focus:border-violet-500/50"
           />
         </div>
       </header>
       <div className="flex-1 overflow-auto p-4">
-        {loading && <p className="text-[12px] text-[#52525b]">Searching…</p>}
+        {loading && <p className="text-[12px] text-[text-slate-400]">Searching…</p>}
         {!loading && q && results.length === 0 && (
-          <p className="text-[12px] text-[#52525b]">No results.</p>
+          <p className="text-[12px] text-[text-slate-400]">No results.</p>
         )}
         <ul className="space-y-1">
           {results.map((r) => (
             <li key={r.id}>
               <Link
                 to={resultLink(r)}
-                className="block rounded-lg border border-transparent px-3 py-2.5 transition hover:border-[#27272f] hover:bg-[#0f0f12]"
+                className="block rounded-lg border border-transparent px-3 py-2.5 transition hover:border-[slate-200] hover:bg-[white]"
               >
                 <div className="flex items-center gap-2">
-                  <span className="rounded bg-[#1a1a22] px-1.5 py-0.5 text-[10px] uppercase text-[#71717a]">
+                  <span className="rounded bg-[violet-50] px-1.5 py-0.5 text-[10px] uppercase text-[text-slate-500]">
                     {r.type}
                   </span>
                   <span className="font-medium">{r.title}</span>
                 </div>
-                <p className="mt-0.5 text-[12px] text-[#71717a]">{r.subtitle}</p>
+                <p className="mt-0.5 text-[12px] text-[text-slate-500]">{r.subtitle}</p>
                 {r.snippet && (
-                  <p className="mt-1 text-[11px] text-[#52525b]">{r.snippet}</p>
+                  <p className="mt-1 text-[11px] text-[text-slate-400]">{r.snippet}</p>
                 )}
               </Link>
             </li>

@@ -33,19 +33,19 @@ export function ClientsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between border-b border-[#1f1f27] px-6 py-4">
+      <header className="flex shrink-0 items-center justify-between border-b border-[slate-200] px-6 py-4">
         <div>
           <h2 className="text-[18px] font-semibold tracking-tight">Clients</h2>
-          <p className="text-[12px] text-[#71717a]">{clients.length} total</p>
+          <p className="text-[12px] text-[text-slate-500]">{clients.length} total</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-[#27272f] p-0.5">
+          <div className="flex rounded-lg border border-[slate-200] p-0.5">
             <button
               type="button"
               onClick={() => setView('cards')}
               className={cn(
                 'rounded-md p-1.5',
-                view === 'cards' ? 'bg-[#1a1a22] text-white' : 'text-[#71717a]',
+                view === 'cards' ? 'bg-[violet-50] text-slate-900' : 'text-[text-slate-500]',
               )}
             >
               <Grid2x2 className="h-4 w-4" />
@@ -55,7 +55,7 @@ export function ClientsPage() {
               onClick={() => setView('table')}
               className={cn(
                 'rounded-md p-1.5',
-                view === 'table' ? 'bg-[#1a1a22] text-white' : 'text-[#71717a]',
+                view === 'table' ? 'bg-[violet-50] text-slate-900' : 'text-[text-slate-500]',
               )}
             >
               <List className="h-4 w-4" />
@@ -64,7 +64,7 @@ export function ClientsPage() {
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-violet-500"
+            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-medium text-slate-900 hover:bg-violet-500"
           >
             <Plus className="h-3.5 w-3.5" />
             New client
@@ -79,7 +79,7 @@ export function ClientsPage() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mb-6 overflow-hidden rounded-xl border border-violet-500/20 bg-[#0f0f12] p-4"
+              className="mb-6 overflow-hidden rounded-xl border border-violet-500/20 bg-[white] p-4"
             >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {(['name', 'company', 'phone', 'country'] as const).map((field) => (
@@ -88,28 +88,28 @@ export function ClientsPage() {
                     placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
                     value={form[field]}
                     onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-                    className="rounded-lg border border-[#27272f] bg-[#09090b] px-3 py-2 text-[13px] outline-none focus:border-violet-500/50"
+                    className="rounded-lg border border-[slate-200] bg-[slate-50] px-3 py-2 text-[13px] outline-none focus:border-violet-500/50"
                   />
                 ))}
                 <input
                   placeholder="Notes"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="rounded-lg border border-[#27272f] bg-[#09090b] px-3 py-2 text-[13px] outline-none focus:border-violet-500/50 sm:col-span-2"
+                  className="rounded-lg border border-[slate-200] bg-[slate-50] px-3 py-2 text-[13px] outline-none focus:border-violet-500/50 sm:col-span-2"
                 />
               </div>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
                   onClick={handleCreate}
-                  className="rounded-lg bg-violet-600 px-4 py-2 text-[12px] text-white"
+                  className="rounded-lg bg-violet-600 px-4 py-2 text-[12px] text-slate-900"
                 >
                   Create
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="rounded-lg px-4 py-2 text-[12px] text-[#71717a] hover:text-white"
+                  className="rounded-lg px-4 py-2 text-[12px] text-[text-slate-500] hover:text-slate-900"
                 >
                   Cancel
                 </button>
@@ -119,7 +119,7 @@ export function ClientsPage() {
         </AnimatePresence>
 
         {clients.length === 0 ? (
-          <p className="text-center text-[#52525b]">No clients yet.</p>
+          <p className="text-center text-[text-slate-400]">No clients yet.</p>
         ) : view === 'cards' ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {clients.map((client, i) => (
@@ -131,20 +131,20 @@ export function ClientsPage() {
               >
                 <Link
                   to={`/clients/${client.id}`}
-                  className="group block rounded-xl border border-[#1f1f27] bg-[#0c0c0f] p-4 transition hover:border-[#3f3f46] hover:bg-[#0f0f12]"
+                  className="group block rounded-xl border border-[slate-200] bg-[white] p-4 transition hover:border-[#3f3f46] hover:bg-[white]"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-medium text-white group-hover:text-violet-300">
+                      <h3 className="font-medium text-slate-900 group-hover:text-violet-700">
                         {client.name}
                       </h3>
-                      <p className="mt-0.5 flex items-center gap-1 text-[12px] text-[#71717a]">
+                      <p className="mt-0.5 flex items-center gap-1 text-[12px] text-[text-slate-500]">
                         <Building2 className="h-3 w-3" />
                         {client.company || '—'}
                       </p>
                     </div>
                   </div>
-                  <p className="mt-3 text-[11px] text-[#52525b]">
+                  <p className="mt-3 text-[11px] text-[text-slate-400]">
                     {client.country || 'No country'} · {client.phone || 'No phone'}
                   </p>
                 </Link>
@@ -152,9 +152,9 @@ export function ClientsPage() {
             ))}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[#1f1f27]">
+          <div className="overflow-hidden rounded-xl border border-[slate-200]">
             <table className="w-full text-left">
-              <thead className="bg-[#0c0c0f] text-[11px] uppercase tracking-wide text-[#52525b]">
+              <thead className="bg-[white] text-[11px] uppercase tracking-wide text-[text-slate-400]">
                 <tr>
                   <th className="px-4 py-2.5">Name</th>
                   <th className="px-4 py-2.5">Company</th>
@@ -166,19 +166,19 @@ export function ClientsPage() {
                 {clients.map((client) => (
                   <tr
                     key={client.id}
-                    className="border-t border-[#1f1f27] transition hover:bg-[#0f0f12]"
+                    className="border-t border-[slate-200] transition hover:bg-[white]"
                   >
                     <td className="px-4 py-2.5">
                       <Link
                         to={`/clients/${client.id}`}
-                        className="font-medium hover:text-violet-300"
+                        className="font-medium hover:text-violet-700"
                       >
                         {client.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-2.5 text-[#a1a1aa]">{client.company}</td>
-                    <td className="px-4 py-2.5 text-[#a1a1aa]">{client.phone}</td>
-                    <td className="px-4 py-2.5 text-[#a1a1aa]">{client.country}</td>
+                    <td className="px-4 py-2.5 text-[text-slate-600]">{client.company}</td>
+                    <td className="px-4 py-2.5 text-[text-slate-600]">{client.phone}</td>
+                    <td className="px-4 py-2.5 text-[text-slate-600]">{client.country}</td>
                   </tr>
                 ))}
               </tbody>
