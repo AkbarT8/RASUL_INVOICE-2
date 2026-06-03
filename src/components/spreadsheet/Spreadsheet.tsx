@@ -29,10 +29,12 @@ import {
 } from 'lucide-react'
 import type { Cell, CellColor, Client, Column, Proforma, Row } from '../../../shared/types'
 import { cn, uid } from '../../lib/utils'
-import { exportProformaToExcel, exportProformaAsInvoice, getSortedRows, getVisibleColumns } from '../../lib/excel'
+import { exportProformaToExcel, getSortedRows, getVisibleColumns } from '../../lib/excel'
 import { updateSelection, selectionModeFromMouseEvent } from '../../lib/selection'
 import { colorStyle } from '../../lib/colors'
 import { ColorPicker } from './ColorPicker'
+import { DownloadNameModal } from './DownloadNameModal'
+import { InvoicePreviewModal } from './InvoicePreviewModal'
 import { ui } from '../../lib/theme'
 
 function emptyCell(): Cell {
@@ -167,7 +169,7 @@ function SortableRow({
   columns: Column[]
   selected: boolean
   compact?: boolean
-  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean) => void
+  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean, fromCheckbox?: boolean) => void
   onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -189,7 +191,7 @@ function SortableRow({
           <input
             type="checkbox"
             checked={selected}
-            onClick={(e) => { e.stopPropagation(); onSelect(row.id, e) }}
+            onClick={(e) => { e.stopPropagation(); onSelect(row.id, e, false, true) }}
             className="rounded border-slate-300"
           />
           <button
@@ -236,7 +238,7 @@ function SortableHeader({
 }: {
   column: Column
   selected: boolean
-  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean) => void
+  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean, fromCheckbox?: boolean) => void
   onRename: (name: string) => void
   onResize: (width: number) => void
   onColor: (color: CellColor) => void
@@ -269,7 +271,7 @@ function SortableHeader({
         <input
           type="checkbox"
           checked={selected}
-          onClick={(e) => onSelect(column.id, e)}
+          onClick={(e) => { e.stopPropagation(); onSelect(column.id, e, false, true) }}
           className="shrink-0 rounded border-slate-300"
         />
         <button
@@ -345,6 +347,10 @@ export function Spreadsheet({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [selectedCols, setSelectedCols] = useState<Set<string>>(new Set())
   const [showExport, setShowExport] = useState(false)
+  const [excelDownload, setExcelDownload] = useState<
+    null | { scope: 'all' | 'selected' | 'visible' }
+  >(null)
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [rowCount, setRowCount] = useState(defaultRowsToAdd)
   const [colCount, setColCount] = useState(defaultColsToAdd)
 
@@ -451,8 +457,8 @@ export function Spreadsheet({
   const rowAnchor = useRef<string | null>(null)
   const colAnchor = useRef<string | null>(null)
 
-  function selectRow(id: string, e: React.MouseEvent, contextMenu = false) {
-    const mode = selectionModeFromMouseEvent(e, contextMenu)
+  function selectRow(id: string, e: React.MouseEvent, contextMenu = false, fromCheckbox = false) {
+    const mode = selectionModeFromMouseEvent(e, contextMenu, fromCheckbox)
     const ids = rows.map((r) => r.id)
     setSelectedRows((prev) => {
       const next = updateSelection(prev, id, ids, mode, rowAnchor.current)
@@ -461,8 +467,8 @@ export function Spreadsheet({
     })
   }
 
-  function selectCol(id: string, e: React.MouseEvent, contextMenu = false) {
-    const mode = selectionModeFromMouseEvent(e, contextMenu)
+  function selectCol(id: string, e: React.MouseEvent, contextMenu = false, fromCheckbox = false) {
+    const mode = selectionModeFromMouseEvent(e, contextMenu, fromCheckbox)
     const ids = columns.map((c) => c.id)
     setSelectedCols((prev) => {
       const next = updateSelection(prev, id, ids, mode, colAnchor.current)
@@ -476,8 +482,27 @@ export function Spreadsheet({
     else setSelectedCols(new Set(columns.map((c) => c.id)))
   }
 
+
+  function defaultExcelName(scope: string) {
+    const base = proforma.number || 'proforma'
+    const date = new Date().toISOString().slice(0, 10)
+    return `${base}_${scope}_${date}.xlsx`
+  }
+
+  function runExcelExport(scope: 'all' | 'selected' | 'visible', filename: string) {
+    const opts: { rowIds?: string[]; columnIds?: string[]; filename: string } = { filename }
+    if (scope === 'selected') {
+      if (rowIds.length) opts.rowIds = rowIds
+      if (colIds.length) opts.columnIds = colIds
+    } else if (scope === 'visible') {
+      opts.columnIds = columns.map((c) => c.id)
+    }
+    exportProformaToExcel(proforma, opts)
+  }
+
   const rowIds = [...selectedRows]
   const colIds = [...selectedCols]
+  const hasSelection = rowIds.length > 0 || colIds.length > 0
 
   function onRowDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -557,15 +582,7 @@ export function Spreadsheet({
           {client && (
             <button
               type="button"
-              onClick={() =>
-                exportProformaAsInvoice(proforma, client, {
-                  companyName: invoiceMeta?.companyName,
-                  footer: invoiceMeta?.footer,
-                  currency: invoiceMeta?.currency,
-                  rowIds: rowIds.length ? rowIds : undefined,
-                  columnIds: colIds.length ? colIds : undefined,
-                })
-              }
+              onClick={() => setInvoiceOpen(true)}
               className={ui.btnSecondary + ' py-1.5 text-[11px]'}
             >
               <FilePlus className="mr-1 inline h-3.5 w-3.5" />
@@ -589,23 +606,24 @@ export function Spreadsheet({
             </button>
             {showExport && (
               <div className={`absolute right-0 top-full z-40 mt-1 w-52 p-1 ${ui.card}`}>
-                {[
-                  ['Whole table', () => exportProformaToExcel(proforma)],
-                  ['Selected rows', () => exportProformaToExcel(proforma, { rowIds }), rowIds.length === 0],
-                  ['Selected columns', () => exportProformaToExcel(proforma, { columnIds: colIds }), colIds.length === 0],
-                  ['Visible columns', () => exportProformaToExcel(proforma, { columnIds: columns.map((c) => c.id) })],
-                ].map(([label, fn, disabled]) => (
+                {(
+                  [
+                    ['Whole table', 'all' as const, false],
+                    ['Selected', 'selected' as const, !hasSelection],
+                    ['Visible columns', 'visible' as const, false],
+                  ] as const
+                ).map(([label, scope, disabled]) => (
                   <button
-                    key={label as string}
+                    key={label}
                     type="button"
-                    disabled={!!disabled}
+                    disabled={disabled}
                     className="block w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50 disabled:opacity-40"
                     onClick={() => {
-                      ;(fn as () => void)()
                       setShowExport(false)
+                      setExcelDownload({ scope })
                     }}
                   >
-                    {label as string}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -697,6 +715,40 @@ export function Spreadsheet({
           </p>
         )}
       </div>
+
+      {excelDownload && (
+        <DownloadNameModal
+          title="Export Excel"
+          defaultName={defaultExcelName(excelDownload.scope)}
+          extension=".xlsx"
+          onClose={() => setExcelDownload(null)}
+          onConfirm={(filename) => {
+            runExcelExport(excelDownload.scope, filename)
+            setExcelDownload(null)
+          }}
+        />
+      )}
+      {invoiceOpen && client && (
+        <InvoicePreviewModal
+          proforma={proforma}
+          client={client}
+          rowIds={rowIds.length ? rowIds : undefined}
+          columnIds={colIds.length ? colIds : undefined}
+          initial={{
+            companyName: invoiceMeta?.companyName || '',
+            invoiceNumber: proforma.number,
+            date: proforma.date,
+            status: proforma.status,
+            currency: invoiceMeta?.currency || '',
+            footer: invoiceMeta?.footer || '',
+            billToName: client.name,
+            billToCompany: client.company,
+            billToCountry: client.country,
+            billToPhone: client.phone,
+          }}
+          onClose={() => setInvoiceOpen(false)}
+        />
+      )}
     </div>
   )
 }

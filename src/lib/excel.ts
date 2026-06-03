@@ -90,6 +90,10 @@ export async function exportProformaAsInvoice(
     currency?: string
     rowIds?: string[]
     columnIds?: string[]
+    filename?: string
+    invoiceNumber?: string
+    date?: string
+    status?: string
   } = {},
 ) {
   const columns = proforma.columns
@@ -112,9 +116,9 @@ export async function exportProformaAsInvoice(
 
   sheet.getCell('A3').value = options.companyName || 'Proforma Workspace'
   sheet.getCell('A3').font = { bold: true }
-  sheet.getCell('A4').value = `Invoice #: ${proforma.number}`
-  sheet.getCell('A5').value = `Date: ${proforma.date}`
-  sheet.getCell('A6').value = `Status: ${proforma.status}`
+  sheet.getCell('A4').value = `Invoice #: ${options.invoiceNumber ?? proforma.number}`
+  sheet.getCell('A5').value = `Date: ${options.date ?? proforma.date}`
+  sheet.getCell('A6').value = `Status: ${options.status ?? proforma.status}`
 
   sheet.getCell('D3').value = 'Bill to:'
   sheet.getCell('D3').font = { bold: true }
@@ -149,7 +153,8 @@ export async function exportProformaAsInvoice(
 
   await downloadWorkbook(
     workbook,
-    `Invoice_${proforma.number}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    options.filename ||
+      `Invoice_${proforma.number}_${new Date().toISOString().slice(0, 10)}.xlsx`,
   )
 }
 

@@ -20,13 +20,18 @@ export function updateSelection(
     return next
   }
 
-  if (mode === 'range' && anchorId) {
-    const a = allIds.indexOf(anchorId)
-    const b = allIds.indexOf(id)
-    if (a >= 0 && b >= 0) {
-      const [lo, hi] = a < b ? [a, b] : [b, a]
-      return new Set(allIds.slice(lo, hi + 1))
+  if (mode === 'range') {
+    if (anchorId) {
+      const a = allIds.indexOf(anchorId)
+      const b = allIds.indexOf(id)
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a]
+        return new Set(allIds.slice(lo, hi + 1))
+      }
     }
+    const next = new Set(prev)
+    next.add(id)
+    return next
   }
 
   if (prev.size === 1 && prev.has(id)) return new Set()
@@ -36,9 +41,10 @@ export function updateSelection(
 export function selectionModeFromMouseEvent(
   e: Pick<MouseEvent, 'shiftKey' | 'ctrlKey' | 'metaKey' | 'button'>,
   contextMenu = false,
+  fromCheckbox = false,
 ): SelectionMode {
   if (contextMenu) return 'add'
   if (e.shiftKey) return 'range'
-  if (e.ctrlKey || e.metaKey) return 'toggle'
+  if (fromCheckbox || e.ctrlKey || e.metaKey) return 'toggle'
   return 'replace'
 }
