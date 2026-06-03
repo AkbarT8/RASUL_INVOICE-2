@@ -6,7 +6,7 @@ import {
   getClientCredentials,
   loadLocalStore,
   saveLocalStore,
-  useServerApi,
+  isServerApiEnabled,
 } from '../lib/persistence'
 import { searchStore } from '../lib/search'
 import type { SearchResult } from '../../shared/types'
@@ -49,7 +49,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedProforma: (id) => set({ selectedProformaId: id }),
 
   bootstrap: async () => {
-    if (useServerApi()) {
+    if (isServerApiEnabled()) {
       try {
         const me = await api.me()
         const store = await api.getData()
@@ -71,7 +71,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   login: async (username, password) => {
-    if (useServerApi()) {
+    if (isServerApiEnabled()) {
       await api.login(username, password)
       const store = await api.getData()
       set({ username, store, loaded: true })
@@ -87,7 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   logout: async () => {
-    if (useServerApi()) {
+    if (isServerApiEnabled()) {
       await api.logout()
     } else {
       sessionStorage.removeItem(SESSION_KEY)
@@ -103,7 +103,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   persist: async () => {
     set({ saving: true })
     try {
-      if (useServerApi()) {
+      if (isServerApiEnabled()) {
         await api.saveData(get().store)
       } else {
         saveLocalStore(get().store)
@@ -114,7 +114,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   search: async (q) => {
-    if (useServerApi()) return api.search(q)
+    if (isServerApiEnabled()) return api.search(q)
     return searchStore(get().store, q)
   },
 
