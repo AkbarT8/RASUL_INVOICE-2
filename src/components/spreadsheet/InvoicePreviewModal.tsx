@@ -4,6 +4,7 @@ import type { Client, Proforma } from '../../../shared/types'
 import { downloadInvoicePdf } from '../../lib/pdf-invoice'
 import { getSortedRows, getVisibleColumns } from '../../lib/excel-utils'
 import { colorStyle } from '../../lib/colors'
+import { displayColumnTitle } from '../../lib/spreadsheet-labels'
 import { ui } from '../../lib/theme'
 
 export interface InvoiceDraft {
@@ -177,13 +178,17 @@ export function InvoicePreviewModal({
               <table className="w-full border-collapse text-[12px]">
                 <thead>
                   <tr className="bg-slate-50">
-                    {columns.map((col) => (
+                    {columns.map((col, colIndex) => (
                       <th
                         key={col.id}
                         className="border-b border-slate-200 px-2 py-2 text-left font-semibold text-slate-600"
                         style={colorStyle(col.color)}
                       >
-                        {col.name}
+                        {displayColumnTitle(
+                          colIndex,
+                          rows[0]?.cells[col.id]?.value,
+                          col.name,
+                        )}
                       </th>
                     ))}
                   </tr>

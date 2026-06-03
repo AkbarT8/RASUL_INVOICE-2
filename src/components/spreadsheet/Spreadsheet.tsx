@@ -20,14 +20,11 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Copy,
   Download,
-  EyeOff,
   FilePlus,
   GripVertical,
   Plus,
-  Trash2,
-  Palette,
 } from 'lucide-react'
-import type { Cell, CellAlign, CellColor, Client, Column, MergedRegion, Proforma, Row } from '../../../shared/types'
+import type { Cell, CellAlign, Client, Column, MergedRegion, Proforma, Row } from '../../../shared/types'
 import { cn, uid } from '../../lib/utils'
 import { exportProformaToExcel, getSortedRows, getVisibleColumns } from '../../lib/excel'
 import {
@@ -51,10 +48,10 @@ import {
   parseCellKey,
   toggleFormat,
 } from '../../lib/cell-format'
-import { ColorPicker } from './ColorPicker'
 import { DownloadNameModal } from './DownloadNameModal'
 import { InvoicePreviewModal } from './InvoicePreviewModal'
 import { FormatToolbar } from './FormatToolbar'
+import { columnLetter } from '../../lib/spreadsheet-labels'
 import { ui } from '../../lib/theme'
 
 function clampCount(n: number) {
@@ -186,7 +183,9 @@ function SortableRow({
   selected,
   selectedCells,
   compact,
+  rowNumber,
   onSelect,
+  onRowHeaderEnter,
   onUpdateCell,
   onCellMouseDown,
   onCellMouseEnter,
@@ -197,7 +196,9 @@ function SortableRow({
   selected: boolean
   selectedCells: Set<string>
   compact?: boolean
-  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean, fromCheckbox?: boolean) => void
+  rowNumber: number
+  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean) => void
+  onRowHeaderEnter: () => void
   onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
   onCellMouseDown: (rowId: string, colId: string, e: React.MouseEvent) => void
   onCellMouseEnter: (rowId: string, colId: string) => void
@@ -216,22 +217,28 @@ function SortableRow({
       className={cn('group border-t border-slate-200', selected && 'bg-violet-50/80')}
       onContextMenu={(e) => { e.preventDefault(); onSelect(row.id, e, true) }}
     >
-      <td className="sticky left-0 z-10 w-10 border-r border-slate-200 bg-white px-1 py-0">
-        <div className="flex items-center gap-0.5">
-          <input
-            type="checkbox"
-            checked={selected}
-            onClick={(e) => { e.stopPropagation(); onSelect(row.id, e, false, true) }}
-            className="rounded border-slate-300"
-          />
-          <button
-            type="button"
-            className="cursor-grab text-slate-400 opacity-0 group-hover:opacity-100"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </button>
+      <td
+        className={cn(
+          'sticky left-0 z-10 w-9 cursor-default select-none border-r border-slate-200 bg-slate-100 p-0 text-center',
+          selected && 'bg-violet-200 ring-2 ring-inset ring-violet-500',
+        )}
+        onMouseDown={(e) => onSelect(row.id, e)}
+        onMouseEnter={onRowHeaderEnter}
+      >
+        <div className="flex flex-col items-center justify-center py-1">
+          {selected && (
+            <button
+              type="button"
+              className="mb-0.5 cursor-grab text-slate-500"
+              {...attributes}
+              {...listeners}
+              onMouseDown={(e) => e.stopPropagation()}
+              title="Переместить строку"
+            >
+              <GripVertical className="h-3 w-3" />
+            </button>
+          )}
+          <span className="text-[11px] font-medium text-slate-600">{rowNumber}</span>
         </div>
       </td>
       {columns.map((col) => {
@@ -268,30 +275,24 @@ function SortableRow({
   )
 }
 
-function SortableHeader({
+function SortableColumnHeader({
   column,
+  letter,
   selected,
-  onSelect,
-  onRename,
+  onMouseDown,
+  onMouseEnter,
   onResize,
-  onColor,
-  onHide,
-  onDelete,
 }: {
   column: Column
+  letter: string
   selected: boolean
-  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean, fromCheckbox?: boolean) => void
-  onRename: (name: string) => void
+  onMouseDown: (e: React.MouseEvent) => void
+  onMouseEnter: () => void
   onResize: (width: number) => void
-  onColor: (color: CellColor) => void
-  onHide: () => void
-  onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: column.id,
   })
-  const [colorOpen, setColorOpen] = useState(false)
-  const headerStyle = colorStyle(column.color)
 
   return (
     <th
@@ -301,66 +302,38 @@ function SortableHeader({
         transition,
         width: column.width,
         maxWidth: column.width,
-        ...headerStyle,
       }}
-      onContextMenu={(e) => { e.preventDefault(); onSelect(column.id, e, true) }}
       className={cn(
-        'group relative border-r border-slate-200 p-0 text-left bg-slate-50',
-        selected && 'ring-2 ring-inset ring-violet-400',
+        'relative select-none border-r border-b border-slate-200 bg-slate-100 p-0',
+        selected && 'bg-violet-200 ring-2 ring-inset ring-violet-500',
       )}
+      onMouseDown={onMouseDown}
+      onMouseEnter={onMouseEnter}
     >
-      <div className="flex items-center gap-0.5 px-1 py-1.5">
-        <input
-          type="checkbox"
-          checked={selected}
-          onClick={(e) => { e.stopPropagation(); onSelect(column.id, e, false, true) }}
-          className="shrink-0 rounded border-slate-300"
-        />
-        <button
-          type="button"
-          className="cursor-grab shrink-0 text-slate-400 opacity-0 group-hover:opacity-100"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-3 w-3" />
-        </button>
-        <input
-          value={column.name}
-          onChange={(e) => onRename(e.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-[10px] font-semibold uppercase tracking-wide text-slate-600 outline-none"
-        />
-        <div className="relative shrink-0">
+      <div className="flex items-center justify-center gap-0.5 py-1.5">
+        {selected && (
           <button
             type="button"
-            onClick={() => setColorOpen(!colorOpen)}
-            className="rounded p-0.5 text-slate-400 hover:text-slate-700"
+            className="cursor-grab text-slate-500"
+            {...attributes}
+            {...listeners}
+            onMouseDown={(e) => e.stopPropagation()}
+            title="Переместить колонку"
           >
-            <Palette className="h-3 w-3" />
+            <GripVertical className="h-3 w-3" />
           </button>
-          {colorOpen && (
-            <div className="absolute right-0 top-full z-50">
-              <ColorPicker
-                value={column.color}
-                onChange={(c) => { onColor(c); setColorOpen(false) }}
-                onClose={() => setColorOpen(false)}
-              />
-            </div>
-          )}
-        </div>
-        <button type="button" onClick={onHide} className="shrink-0 text-slate-400 hover:text-slate-600">
-          <EyeOff className="h-3 w-3" />
-        </button>
-        <button type="button" onClick={onDelete} className="shrink-0 text-slate-400 hover:text-red-500">
-          <Trash2 className="h-3 w-3" />
-        </button>
+        )}
+        <span className="text-[11px] font-semibold text-slate-700">{letter}</span>
       </div>
       <div
         className="absolute bottom-0 right-0 top-0 w-1.5 cursor-col-resize hover:bg-violet-400/60"
         onMouseDown={(e) => {
           e.preventDefault()
+          e.stopPropagation()
           const startX = e.clientX
           const startW = column.width
-          const onMove = (ev: MouseEvent) => onResize(Math.max(48, Math.min(480, startW + ev.clientX - startX)))
+          const onMove = (ev: MouseEvent) =>
+            onResize(Math.max(48, Math.min(480, startW + ev.clientX - startX)))
           const onUp = () => {
             window.removeEventListener('mousemove', onMove)
             window.removeEventListener('mouseup', onUp)
@@ -398,6 +371,8 @@ export function Spreadsheet({
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
   const cellAnchor = useRef<string | null>(null)
   const dragSelect = useRef(false)
+  const rowDragSelect = useRef(false)
+  const colDragSelect = useRef(false)
 
   const columns = useMemo(() => getVisibleColumns(proforma.columns), [proforma.columns])
   const rows = useMemo(() => getSortedRows(proforma.rows), [proforma.rows])
@@ -438,7 +413,7 @@ export function Spreadsheet({
     for (let i = 0; i < count; i++) {
       const col: Column = {
         id: uid('col'),
-        name: `Column ${start + i + 1}`,
+        name: '',
         width: defaultColumnWidth,
         hidden: false,
         order: start + i,
@@ -504,6 +479,23 @@ export function Spreadsheet({
     [rows, columns],
   )
 
+  function syncCellsFromCols(colSet: Set<string>) {
+    const keys = new Set<string>()
+    for (const colId of colSet) {
+      for (const row of rows) keys.add(cellKey(row.id, colId))
+    }
+    setSelectedCells(keys)
+  }
+
+  function syncCellsFromRows(rowSet: Set<string>) {
+    const keys = new Set<string>()
+    for (const rowId of rowSet) {
+      for (const col of columns) keys.add(cellKey(rowId, col.id))
+    }
+    setSelectedCells(keys)
+  }
+
+
   function clearAllSelection() {
     setSelectedRows(new Set())
     setSelectedCols(new Set())
@@ -512,6 +504,8 @@ export function Spreadsheet({
     colAnchor.current = null
     cellAnchor.current = null
     dragSelect.current = false
+    rowDragSelect.current = false
+    colDragSelect.current = false
   }
 
   function applyToTargetCells(mutator: (cell: Cell) => Cell) {
@@ -579,18 +573,28 @@ export function Spreadsheet({
   useEffect(() => {
     const up = () => {
       dragSelect.current = false
+      rowDragSelect.current = false
+      colDragSelect.current = false
     }
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
   }, [])
 
   function mergeSelectedCells() {
-    const keys = [...selectedCells]
+    const keys = collectTargetCellKeys(
+      proforma,
+      columns.map((c) => c.id),
+      rows,
+      selectedCells,
+      selectedRows,
+      selectedCols,
+    )
     if (keys.length < 2) return
     const merge = createMergeFromCells(proforma, keys, rows, columns)
     if (!merge) return
     const merges = [...(proforma.merges || []), merge]
     patch({ merges })
+    clearAllSelection()
   }
 
   function selectionSummary() {
@@ -604,29 +608,61 @@ export function Spreadsheet({
   const rowAnchor = useRef<string | null>(null)
   const colAnchor = useRef<string | null>(null)
 
-  function selectRow(id: string, e: React.MouseEvent, contextMenu = false, fromCheckbox = false) {
-    const mode = selectionModeFromMouseEvent(e, contextMenu, fromCheckbox)
+  function selectRow(id: string, e: React.MouseEvent, contextMenu = false) {
+    e.preventDefault()
+    const mode = selectionModeFromMouseEvent(e, contextMenu, false)
     const ids = rows.map((r) => r.id)
-    setSelectedRows((prev) => {
-      const next = updateSelection(prev, id, ids, mode, rowAnchor.current)
-      if (mode === 'replace' || mode === 'range') rowAnchor.current = id
-      return next
-    })
+    const next = updateSelection(selectedRows, id, ids, mode, rowAnchor.current)
+    if (mode === 'replace' || mode === 'range') rowAnchor.current = id
+    if (mode === 'replace' || mode === 'range') rowDragSelect.current = true
+    setSelectedRows(next)
+    if (mode === 'replace') setSelectedCols(new Set())
+    syncCellsFromRows(next)
   }
 
-  function selectCol(id: string, e: React.MouseEvent, contextMenu = false, fromCheckbox = false) {
-    const mode = selectionModeFromMouseEvent(e, contextMenu, fromCheckbox)
+  function onRowHeaderEnter(id: string) {
+    if (!rowDragSelect.current || !rowAnchor.current) return
+    const ids = rows.map((r) => r.id)
+    const a = ids.indexOf(rowAnchor.current)
+    const b = ids.indexOf(id)
+    if (a < 0 || b < 0) return
+    const [lo, hi] = a < b ? [a, b] : [b, a]
+    const next = new Set(ids.slice(lo, hi + 1))
+    setSelectedRows(next)
+    syncCellsFromRows(next)
+  }
+
+  function selectCol(id: string, e: React.MouseEvent, contextMenu = false) {
+    e.preventDefault()
+    const mode = selectionModeFromMouseEvent(e, contextMenu, false)
     const ids = columns.map((c) => c.id)
-    setSelectedCols((prev) => {
-      const next = updateSelection(prev, id, ids, mode, colAnchor.current)
-      if (mode === 'replace' || mode === 'range') colAnchor.current = id
-      return next
-    })
+    const next = updateSelection(selectedCols, id, ids, mode, colAnchor.current)
+    if (mode === 'replace' || mode === 'range') colAnchor.current = id
+    if (mode === 'replace' || mode === 'range') colDragSelect.current = true
+    setSelectedCols(next)
+    if (mode === 'replace') setSelectedRows(new Set())
+    syncCellsFromCols(next)
   }
 
-  function selectAllCols() {
-    if (selectedCols.size === columns.length) setSelectedCols(new Set())
-    else setSelectedCols(new Set(columns.map((c) => c.id)))
+  function onColHeaderEnter(id: string) {
+    if (!colDragSelect.current || !colAnchor.current) return
+    const ids = columns.map((c) => c.id)
+    const a = ids.indexOf(colAnchor.current)
+    const b = ids.indexOf(id)
+    if (a < 0 || b < 0) return
+    const [lo, hi] = a < b ? [a, b] : [b, a]
+    const next = new Set(ids.slice(lo, hi + 1))
+    setSelectedCols(next)
+    syncCellsFromCols(next)
+  }
+
+  function selectAllGrid(e: React.MouseEvent) {
+    e.preventDefault()
+    const allR = new Set(rows.map((r) => r.id))
+    const allC = new Set(columns.map((c) => c.id))
+    setSelectedRows(allR)
+    setSelectedCols(allC)
+    setSelectedCells(new Set(allCellKeys))
   }
 
 
@@ -825,7 +861,26 @@ export function Spreadsheet({
             applyToTargetCells((c) => ({ ...c, color }))
           }
           onMerge={mergeSelectedCells}
-          canMerge={selectedCells.size >= 2}
+          canMerge={
+            collectTargetCellKeys(
+              proforma,
+              columns.map((c) => c.id),
+              rows,
+              selectedCells,
+              selectedRows,
+              selectedCols,
+            ).length >= 2
+          }
+          selectedColCount={colIds.length}
+          onHideSelectedColumns={() => {
+            patch({
+              columns: proforma.columns.map((c) =>
+                colIds.includes(c.id) ? { ...c, hidden: true } : c,
+              ),
+            })
+            clearAllSelection()
+          }}
+          onDeleteSelectedColumns={() => deleteColumns(colIds)}
         />
       )}
 
@@ -834,29 +889,20 @@ export function Spreadsheet({
           <table className={cn('border-collapse text-[12px]', showGridLines && 'border border-slate-200')} style={{ tableLayout: 'fixed' }}>
             <thead className="sticky top-0 z-20">
               <tr>
-                <th className="sticky left-0 z-30 w-10 border-b border-r border-slate-200 bg-slate-100">
-                  <input
-                    type="checkbox"
-                    checked={columns.length > 0 && selectedCols.size === columns.length}
-                    onChange={selectAllCols}
-                    className="m-2 rounded border-slate-300"
-                    title="Select all columns"
-                  />
-                </th>
+                <th
+                  className="sticky left-0 z-30 w-9 cursor-pointer select-none border-b border-r border-slate-200 bg-slate-100"
+                  onMouseDown={selectAllGrid}
+                  title="Выделить всё"
+                />
                 <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
-                  {columns.map((col) => (
-                    <SortableHeader
+                  {columns.map((col, colIndex) => (
+                    <SortableColumnHeader
                       key={col.id}
                       column={col}
+                      letter={columnLetter(colIndex)}
                       selected={selectedCols.has(col.id)}
-                      onSelect={selectCol}
-                      onRename={(name) =>
-                        patch({
-                          columns: proforma.columns.map((c) =>
-                            c.id === col.id ? { ...c, name } : c,
-                          ),
-                        })
-                      }
+                      onMouseDown={(e) => selectCol(col.id, e)}
+                      onMouseEnter={() => onColHeaderEnter(col.id)}
                       onResize={(width) =>
                         patch({
                           columns: proforma.columns.map((c) =>
@@ -864,24 +910,6 @@ export function Spreadsheet({
                           ),
                         })
                       }
-                      onColor={(color) =>
-                        patch({
-                          columns: proforma.columns.map((c) =>
-                            c.id === col.id ? { ...c, color } : c,
-                          ),
-                        })
-                      }
-                      onHide={() =>
-                        patch({
-                          columns: proforma.columns.map((c) =>
-                            c.id === col.id ? { ...c, hidden: true } : c,
-                          ),
-                        })
-                      }
-                      onDelete={() => {
-                        if (!confirm('Delete this column?')) return
-                        deleteColumns([col.id])
-                      }}
                     />
                   ))}
                 </SortableContext>
@@ -890,7 +918,7 @@ export function Spreadsheet({
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onRowDragEnd}>
               <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
-                  {rows.map((row) => (
+                  {rows.map((row, rowIndex) => (
                     <SortableRow
                       key={row.id}
                       row={row}
@@ -899,7 +927,9 @@ export function Spreadsheet({
                       selected={selectedRows.has(row.id)}
                       selectedCells={selectedCells}
                       compact={compact}
+                      rowNumber={rowIndex + 1}
                       onSelect={selectRow}
+                      onRowHeaderEnter={() => onRowHeaderEnter(row.id)}
                       onUpdateCell={updateCell}
                       onCellMouseDown={onCellMouseDown}
                       onCellMouseEnter={onCellMouseEnter}

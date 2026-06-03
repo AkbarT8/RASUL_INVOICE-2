@@ -1,4 +1,6 @@
 import {
+  EyeOff,
+  Trash2,
   AlignCenter,
   AlignLeft,
   AlignRight,
@@ -24,6 +26,9 @@ export function FormatToolbar({
   onColor,
   onMerge,
   canMerge,
+  selectedColCount = 0,
+  onHideSelectedColumns,
+  onDeleteSelectedColumns,
 }: {
   selectionLabel: string
   onClearSelection: () => void
@@ -34,6 +39,9 @@ export function FormatToolbar({
   onColor: (color: CellColor) => void
   onMerge: () => void
   canMerge: boolean
+  selectedColCount?: number
+  onHideSelectedColumns?: () => void
+  onDeleteSelectedColumns?: () => void
 }) {
   const [colorOpen, setColorOpen] = useState(false)
 
@@ -86,6 +94,28 @@ export function FormatToolbar({
           </div>
         )}
       </div>
+
+      {selectedColCount > 0 && onHideSelectedColumns && onDeleteSelectedColumns && (
+        <>
+          <span className="mx-1 h-4 w-px bg-slate-300" />
+          <button
+            type="button"
+            className={btn}
+            onClick={onHideSelectedColumns}
+            title="Скрыть колонки"
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className={btn + ' text-red-600 hover:bg-red-50'}
+            onClick={onDeleteSelectedColumns}
+            title="Удалить колонки"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </>
+      )}
       {canMerge && (
         <>
           <span className="mx-1 h-4 w-px bg-slate-300" />

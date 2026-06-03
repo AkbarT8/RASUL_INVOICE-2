@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import type { Client, Column, Proforma, Row } from '../../shared/types'
 import { colorToExcelArgb, normalizeColor } from './colors'
+import { displayColumnTitle } from './spreadsheet-labels'
 
 function applyCellStyle(
   cell: ExcelJS.Cell,
@@ -47,9 +48,14 @@ function buildSheet(
   columns: Column[],
   rows: Row[],
 ) {
+  const headerRow = rows[0]
   columns.forEach((col, i) => {
     const cell = sheet.getCell(1, i + 1)
-    cell.value = col.name
+    cell.value = displayColumnTitle(
+      i,
+      headerRow?.cells[col.id]?.value,
+      col.name,
+    )
     applyCellStyle(cell, normalizeColor(col.color), { bold: true })
     sheet.getColumn(i + 1).width = Math.max(10, Math.round(col.width / 7))
   })
@@ -145,9 +151,14 @@ export async function exportProformaAsInvoice(
   sheet.getCell('D7').value = client.phone
 
   const startRow = 10
+  const headerRow = rows[0]
   columns.forEach((col, i) => {
     const cell = sheet.getCell(startRow, i + 1)
-    cell.value = col.name
+    cell.value = displayColumnTitle(
+      i,
+      headerRow?.cells[col.id]?.value,
+      col.name,
+    )
     applyCellStyle(cell, normalizeColor(col.color), { bold: true })
   })
 

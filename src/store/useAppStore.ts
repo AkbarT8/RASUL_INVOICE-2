@@ -67,9 +67,9 @@ const SESSION_KEY = 'proforma_session_user'
 
 function defaultColumns(width: number): Column[] {
   return [
-    { id: uid('col'), name: 'Article', width, hidden: false, order: 0, color: null },
-    { id: uid('col'), name: 'Quantity', width: Math.min(width, 96), hidden: false, order: 1, color: null },
-    { id: uid('col'), name: 'Price', width: Math.min(width, 96), hidden: false, order: 2, color: null },
+    { id: uid('col'), name: '', width, hidden: false, order: 0, color: null },
+    { id: uid('col'), name: '', width, hidden: false, order: 1, color: null },
+    { id: uid('col'), name: '', width, hidden: false, order: 2, color: null },
   ]
 }
 
@@ -222,7 +222,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: get().store.settings.defaultStatus,
       notes: '',
       columns: defaultColumns(w),
-      rows: [],
+      rows: [
+        {
+          id: uid('row'),
+          order: 0,
+          cells: Object.fromEntries(
+            defaultColumns(w).map((col) => [col.id, { value: '', type: 'text' as const, color: null }]),
+          ),
+        },
+      ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }

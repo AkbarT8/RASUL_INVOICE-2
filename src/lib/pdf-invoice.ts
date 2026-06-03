@@ -4,6 +4,7 @@ import type { Client, Proforma } from '../../shared/types'
 import { normalizeColor } from './colors'
 import { getSortedRows, getVisibleColumns } from './excel-utils'
 import { isHiddenByMerge, normalizeCell } from './cell-format'
+import { displayColumnTitle } from './spreadsheet-labels'
 
 export interface InvoicePdfOptions {
   companyName: string
@@ -76,7 +77,12 @@ export function downloadInvoicePdf(
   y2 += 5
   if (options.billToPhone) doc.text(options.billToPhone, pageW / 2 + 10, y2)
 
-  const head = [columns.map((c) => c.name)]
+  const headerRow = rows[0]
+  const head = [
+    columns.map((c, i) =>
+      displayColumnTitle(i, headerRow?.cells[c.id]?.value, c.name),
+    ),
+  ]
   const body = rows.map((row) =>
     columns.map((col) => {
       if (isHiddenByMerge(proforma.merges, row.id, col.id)) return ''
