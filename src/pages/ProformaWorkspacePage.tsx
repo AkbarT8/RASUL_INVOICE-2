@@ -14,6 +14,7 @@ export function ProformaWorkspacePage() {
   const addProforma = useAppStore((s) => s.addProforma)
   const setSelectedClient = useAppStore((s) => s.setSelectedClient)
   const setSelectedProforma = useAppStore((s) => s.setSelectedProforma)
+  const pinProforma = useAppStore((s) => s.pinProforma)
 
   const client = store.clients.find((c) => c.id === clientId)
   const proforma = store.proformas.find((p) => p.id === proformaId)
@@ -21,7 +22,8 @@ export function ProformaWorkspacePage() {
   useEffect(() => {
     if (clientId) setSelectedClient(clientId)
     if (proformaId) setSelectedProforma(proformaId)
-  }, [clientId, proformaId, setSelectedClient, setSelectedProforma])
+    if (clientId && proformaId) pinProforma(clientId, proformaId)
+  }, [clientId, proformaId, setSelectedClient, setSelectedProforma, pinProforma])
 
   if (!client || !proforma) {
     return (
@@ -103,7 +105,16 @@ export function ProformaWorkspacePage() {
           compact={compact}
           confirmDeletes={store.settings.confirmDeletes}
           defaultColumnWidth={store.settings.defaultColumnWidth}
+          defaultRowsToAdd={store.settings.defaultRowsToAdd}
+          defaultColsToAdd={store.settings.defaultColsToAdd}
+          showGridLines={store.settings.showGridLines}
           onCreateProforma={handleCreateProforma}
+          client={client}
+          invoiceMeta={{
+            companyName: store.settings.invoiceCompanyName,
+            footer: store.settings.invoiceFooter,
+            currency: store.settings.currencySymbol,
+          }}
         />
       </div>
     </div>

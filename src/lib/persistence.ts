@@ -11,6 +11,15 @@ const DEFAULT_STORE: AppStore = {
     defaultColumnWidth: 120,
     compactTable: false,
     confirmDeletes: true,
+    proformaPrefix: 'PF-',
+    currencySymbol: '€',
+    defaultRowsToAdd: 1,
+    defaultColsToAdd: 1,
+    autoSaveMs: 400,
+    showGridLines: true,
+    invoiceCompanyName: 'Proforma Workspace',
+    invoiceFooter: 'Thank you for your business.',
+    dateFormat: 'eu',
   },
 }
 

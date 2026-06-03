@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { getClientCredentials } from '../lib/persistence'
 import { ui } from '../lib/theme'
-import { Eye, EyeOff, Check } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 
 export function SettingsPage() {
   const settings = useAppStore((s) => s.store.settings)
@@ -53,11 +53,11 @@ export function SettingsPage() {
         <p className={`mt-1 text-[13px] ${ui.textMuted}`}>Workspace preferences</p>
       </header>
 
-      <div className="mx-auto w-full max-w-2xl space-y-6 p-6">
+      <div className="mx-auto w-full max-w-2xl space-y-5 p-6">
         <section className={`p-5 ${ui.card}`}>
           <h3 className="text-[14px] font-semibold text-slate-900">Account</h3>
           <p className={`mt-1 text-[12px] ${ui.textMuted}`}>
-            Signed in as <span className="font-medium text-slate-700">{username}</span>
+            Signed in as <strong>{username}</strong>
           </p>
           <form onSubmit={saveCredentials} className="mt-4 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -84,16 +84,14 @@ export function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowPw((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
                   >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
               <div>
-                <label className="text-[12px] font-medium text-slate-600">
-                  New password (optional)
-                </label>
+                <label className="text-[12px] font-medium text-slate-600">New password</label>
                 <input
                   type="password"
                   value={newPassword}
@@ -102,9 +100,7 @@ export function SettingsPage() {
                 />
               </div>
               <div>
-                <label className="text-[12px] font-medium text-slate-600">
-                  Confirm new password
-                </label>
+                <label className="text-[12px] font-medium text-slate-600">Confirm password</label>
                 <input
                   type="password"
                   value={confirmPassword}
@@ -114,9 +110,7 @@ export function SettingsPage() {
               </div>
             </div>
             {credMsg && (
-              <p
-                className={`text-[12px] ${credMsg.ok ? 'text-emerald-600' : 'text-red-600'}`}
-              >
+              <p className={`text-[12px] ${credMsg.ok ? 'text-emerald-600' : 'text-red-600'}`}>
                 {credMsg.text}
               </p>
             )}
@@ -128,11 +122,9 @@ export function SettingsPage() {
 
         <section className={`p-5 ${ui.card}`}>
           <h3 className="text-[14px] font-semibold text-slate-900">Proforma defaults</h3>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="text-[12px] font-medium text-slate-600">
-                Default status for new proformas
-              </label>
+              <label className="text-[12px] font-medium text-slate-600">Default status</label>
               <input
                 value={settings.defaultStatus}
                 onChange={(e) =>
@@ -145,13 +137,24 @@ export function SettingsPage() {
               />
             </div>
             <div>
-              <label className="text-[12px] font-medium text-slate-600">
-                Default column width (px)
-              </label>
+              <label className="text-[12px] font-medium text-slate-600">Number prefix</label>
+              <input
+                value={settings.proformaPrefix}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: { ...s.settings, proformaPrefix: e.target.value },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Column width (px)</label>
               <input
                 type="number"
-                min={60}
-                max={400}
+                min={48}
+                max={480}
                 value={settings.defaultColumnWidth}
                 onChange={(e) =>
                   updateStore((s) => ({
@@ -162,14 +165,138 @@ export function SettingsPage() {
                     },
                   }))
                 }
-                className={`mt-1 w-full max-w-[200px] ${ui.input}`}
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Currency symbol</label>
+              <input
+                value={settings.currencySymbol}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: { ...s.settings, currencySymbol: e.target.value },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Rows to add (+Row)</label>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={settings.defaultRowsToAdd}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: {
+                      ...s.settings,
+                      defaultRowsToAdd: Number(e.target.value) || 1,
+                    },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Columns to add (+Col)</label>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={settings.defaultColsToAdd}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: {
+                      ...s.settings,
+                      defaultColsToAdd: Number(e.target.value) || 1,
+                    },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Auto-save delay (ms)</label>
+              <input
+                type="number"
+                min={200}
+                max={5000}
+                step={100}
+                value={settings.autoSaveMs}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: {
+                      ...s.settings,
+                      autoSaveMs: Number(e.target.value) || 400,
+                    },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Date format</label>
+              <select
+                value={settings.dateFormat}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: {
+                      ...s.settings,
+                      dateFormat: e.target.value as 'eu' | 'us' | 'iso',
+                    },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              >
+                <option value="eu">DD.MM.YYYY</option>
+                <option value="us">MM/DD/YYYY</option>
+                <option value="iso">YYYY-MM-DD</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section className={`p-5 ${ui.card}`}>
+          <h3 className="text-[14px] font-semibold text-slate-900">Invoice export</h3>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Company name on invoice</label>
+              <input
+                value={settings.invoiceCompanyName}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: { ...s.settings, invoiceCompanyName: e.target.value },
+                  }))
+                }
+                className={`mt-1 w-full ${ui.input}`}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600">Invoice footer text</label>
+              <textarea
+                value={settings.invoiceFooter}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: { ...s.settings, invoiceFooter: e.target.value },
+                  }))
+                }
+                rows={2}
+                className={`mt-1 w-full resize-none ${ui.input}`}
               />
             </div>
           </div>
         </section>
 
         <section className={`p-5 ${ui.card}`}>
-          <h3 className="text-[14px] font-semibold text-slate-900">Workspace behavior</h3>
+          <h3 className="text-[14px] font-semibold text-slate-900">Table & safety</h3>
           <ul className="mt-4 space-y-3">
             <label className="flex cursor-pointer items-center gap-3">
               <input
@@ -188,6 +315,20 @@ export function SettingsPage() {
             <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
+                checked={settings.showGridLines}
+                onChange={(e) =>
+                  updateStore((s) => ({
+                    ...s,
+                    settings: { ...s.settings, showGridLines: e.target.checked },
+                  }))
+                }
+                className="rounded border-slate-300 text-violet-600"
+              />
+              <span className="text-[13px] text-slate-700">Show grid lines in spreadsheet</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
                 checked={settings.confirmDeletes}
                 onChange={(e) =>
                   updateStore((s) => ({
@@ -197,19 +338,12 @@ export function SettingsPage() {
                 }
                 className="rounded border-slate-300 text-violet-600"
               />
-              <span className="text-[13px] text-slate-700">
-                Confirm before deleting rows, columns, or clients
-              </span>
+              <span className="text-[13px] text-slate-700">Confirm before delete</span>
             </label>
           </ul>
-        </section>
-
-        <section className={`p-5 ${ui.card}`}>
-          <h3 className="text-[14px] font-semibold text-slate-900">Data</h3>
-          <p className={`mt-2 flex items-start gap-2 text-[12px] leading-relaxed ${ui.textMuted}`}>
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-            Changes auto-save to your browser. Export proformas to Excel from the spreadsheet
-            toolbar at any time.
+          <p className={`mt-4 text-[11px] leading-relaxed ${ui.textMuted}`}>
+            Selection tips: click to select one; Ctrl+click to toggle multiple; Shift+click for
+            range; right-click to add to selection without clearing others.
           </p>
         </section>
       </div>

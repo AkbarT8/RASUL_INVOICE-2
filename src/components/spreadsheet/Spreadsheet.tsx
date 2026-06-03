@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
@@ -26,11 +27,13 @@ import {
   Trash2,
   Palette,
 } from 'lucide-react'
-import type { Cell, CellColor, CellType, Column, Proforma, Row } from '../../../shared/types'
+import type { Cell, CellColor, Client, Column, Proforma, Row } from '../../../shared/types'
 import { cn, uid } from '../../lib/utils'
-import { exportProformaToExcel, getSortedRows, getVisibleColumns } from '../../lib/excel'
-import { cellColorClass, ui } from '../../lib/theme'
-import { COLOR_OPTIONS, CELL_TYPES } from './spreadsheet-constants'
+import { exportProformaToExcel, exportProformaAsInvoice, getSortedRows, getVisibleColumns } from '../../lib/excel'
+import { updateSelection, selectionModeFromMouseEvent } from '../../lib/selection'
+import { colorStyle } from '../../lib/colors'
+import { ColorPicker } from './ColorPicker'
+import { ui } from '../../lib/theme'
 
 function emptyCell(): Cell {
   return { value: '', type: 'text', color: null }
@@ -46,7 +49,12 @@ interface SpreadsheetProps {
   compact?: boolean
   confirmDeletes?: boolean
   defaultColumnWidth?: number
+  defaultRowsToAdd?: number
+  defaultColsToAdd?: number
+  showGridLines?: boolean
   onCreateProforma?: () => void
+  client?: Client
+  invoiceMeta?: { companyName: string; footer: string; currency: string }
 }
 
 function CountButton({
@@ -85,12 +93,12 @@ function CountButton({
 
 function CellEditor({
   cell,
-  colorClass,
+  cellStyle,
   compact,
   onChange,
 }: {
   cell: Cell
-  colorClass?: string
+  cellStyle?: React.CSSProperties
   compact?: boolean
   onChange: (cell: Cell) => void
 }) {
@@ -98,7 +106,7 @@ function CellEditor({
   const h = compact ? 'min-h-[28px]' : 'min-h-[34px]'
 
   return (
-    <div className={cn('group/cell relative border-r border-slate-200', h, colorClass)}>
+    <div className={cn('group/cell relative border-r border-slate-200', h)} style={cellStyle}>
       {cell.type === 'notes' ? (
         <textarea
           value={cell.value}
@@ -135,45 +143,12 @@ function CellEditor({
         <Palette className="h-3 w-3" />
       </button>
       {menu && (
-        <div
-          className={`absolute right-0 top-full z-50 mt-0.5 p-2 shadow-lg ${ui.card}`}
-          onMouseLeave={() => setMenu(false)}
-        >
-          <p className="mb-1 text-[10px] text-slate-400">Color</p>
-          <div className="mb-2 flex flex-wrap gap-1">
-            {COLOR_OPTIONS.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  onChange({ ...cell, color: c.id })
-                  setMenu(false)
-                }}
-                className={cn('h-5 w-5 rounded border border-slate-200', c.class)}
-              />
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                onChange({ ...cell, color: null })
-                setMenu(false)
-              }}
-              className="px-1 text-[10px] text-slate-500"
-            >
-              Clear
-            </button>
-          </div>
-          <select
-            value={cell.type}
-            onChange={(e) => onChange({ ...cell, type: e.target.value as CellType })}
-            className="w-full rounded border border-slate-200 px-1 py-0.5 text-[11px]"
-          >
-            {CELL_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+        <div className="absolute right-0 top-full z-50">
+          <ColorPicker
+            value={cell.color}
+            onChange={(c) => onChange({ ...cell, color: c })}
+            onClose={() => setMenu(false)}
+          />
         </div>
       )}
     </div>
@@ -192,7 +167,7 @@ function SortableRow({
   columns: Column[]
   selected: boolean
   compact?: boolean
-  onSelect: (id: string, multi: boolean) => void
+  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean) => void
   onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -207,13 +182,14 @@ function SortableRow({
         opacity: isDragging ? 0.5 : 1,
       }}
       className={cn('group border-t border-slate-200', selected && 'bg-violet-50/80')}
+      onContextMenu={(e) => { e.preventDefault(); onSelect(row.id, e, true) }}
     >
       <td className="sticky left-0 z-10 w-10 border-r border-slate-200 bg-white px-1 py-0">
         <div className="flex items-center gap-0.5">
           <input
             type="checkbox"
             checked={selected}
-            onChange={(e) => onSelect(row.id, (e.nativeEvent as MouseEvent).shiftKey)}
+            onClick={(e) => { e.stopPropagation(); onSelect(row.id, e) }}
             className="rounded border-slate-300"
           />
           <button
@@ -228,8 +204,7 @@ function SortableRow({
       </td>
       {columns.map((col) => {
         const cell = row.cells[col.id] || emptyCell()
-        const colBg = col.color ? cellColorClass[col.color] : undefined
-        const cellBg = cell.color ? cellColorClass[cell.color] : colBg
+        const cellStyle = colorStyle(cell.color) ?? colorStyle(col.color)
         return (
           <td
             key={col.id}
@@ -238,7 +213,7 @@ function SortableRow({
           >
             <CellEditor
               cell={cell}
-              colorClass={cellBg}
+              cellStyle={cellStyle}
               compact={compact}
               onChange={(next) => onUpdateCell(row.id, col.id, next)}
             />
@@ -261,7 +236,7 @@ function SortableHeader({
 }: {
   column: Column
   selected: boolean
-  onSelect: (id: string, multi: boolean) => void
+  onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean) => void
   onRename: (name: string) => void
   onResize: (width: number) => void
   onColor: (color: CellColor) => void
@@ -272,7 +247,7 @@ function SortableHeader({
     id: column.id,
   })
   const [colorOpen, setColorOpen] = useState(false)
-  const headerBg = column.color ? cellColorClass[column.color] : 'bg-slate-50'
+  const headerStyle = colorStyle(column.color)
 
   return (
     <th
@@ -282,10 +257,11 @@ function SortableHeader({
         transition,
         width: column.width,
         maxWidth: column.width,
+        ...headerStyle,
       }}
+      onContextMenu={(e) => { e.preventDefault(); onSelect(column.id, e, true) }}
       className={cn(
-        'group relative border-r border-slate-200 p-0 text-left',
-        headerBg,
+        'group relative border-r border-slate-200 p-0 text-left bg-slate-50',
         selected && 'ring-2 ring-inset ring-violet-400',
       )}
     >
@@ -293,7 +269,7 @@ function SortableHeader({
         <input
           type="checkbox"
           checked={selected}
-          onChange={(e) => onSelect(column.id, (e.nativeEvent as MouseEvent).shiftKey)}
+          onClick={(e) => onSelect(column.id, e)}
           className="shrink-0 rounded border-slate-300"
         />
         <button
@@ -318,28 +294,12 @@ function SortableHeader({
             <Palette className="h-3 w-3" />
           </button>
           {colorOpen && (
-            <div className={`absolute right-0 top-full z-50 mt-1 flex gap-1 p-1.5 ${ui.card}`}>
-              {COLOR_OPTIONS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => {
-                    onColor(c.id)
-                    setColorOpen(false)
-                  }}
-                  className={cn('h-4 w-4 rounded border border-slate-200', c.class)}
-                />
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  onColor(null)
-                  setColorOpen(false)
-                }}
-                className="px-1 text-[9px] text-slate-500"
-              >
-                ×
-              </button>
+            <div className="absolute right-0 top-full z-50">
+              <ColorPicker
+                value={column.color}
+                onChange={(c) => { onColor(c); setColorOpen(false) }}
+                onClose={() => setColorOpen(false)}
+              />
             </div>
           )}
         </div>
@@ -375,14 +335,18 @@ export function Spreadsheet({
   compact,
   confirmDeletes = true,
   defaultColumnWidth = 120,
+  defaultRowsToAdd = 1,
+  defaultColsToAdd = 1,
+  showGridLines = true,
   onCreateProforma,
+  client,
+  invoiceMeta,
 }: SpreadsheetProps) {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [selectedCols, setSelectedCols] = useState<Set<string>>(new Set())
   const [showExport, setShowExport] = useState(false)
-  const [rowCount, setRowCount] = useState(1)
-  const [colCount, setColCount] = useState(1)
-  const lastColClick = useRef<string | null>(null)
+  const [rowCount, setRowCount] = useState(defaultRowsToAdd)
+  const [colCount, setColCount] = useState(defaultColsToAdd)
 
   const columns = useMemo(() => getVisibleColumns(proforma.columns), [proforma.columns])
   const rows = useMemo(() => getSortedRows(proforma.rows), [proforma.rows])
@@ -484,30 +448,25 @@ export function Spreadsheet({
     })
   }
 
-  function selectRow(id: string, multi: boolean) {
+  const rowAnchor = useRef<string | null>(null)
+  const colAnchor = useRef<string | null>(null)
+
+  function selectRow(id: string, e: React.MouseEvent, contextMenu = false) {
+    const mode = selectionModeFromMouseEvent(e, contextMenu)
+    const ids = rows.map((r) => r.id)
     setSelectedRows((prev) => {
-      const next = new Set(multi ? prev : [])
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const next = updateSelection(prev, id, ids, mode, rowAnchor.current)
+      if (mode === 'replace' || mode === 'range') rowAnchor.current = id
       return next
     })
   }
 
-  function selectCol(id: string, multi: boolean) {
+  function selectCol(id: string, e: React.MouseEvent, contextMenu = false) {
+    const mode = selectionModeFromMouseEvent(e, contextMenu)
+    const ids = columns.map((c) => c.id)
     setSelectedCols((prev) => {
-      let next = new Set(multi ? prev : [])
-      if (multi && lastColClick.current && columns.length) {
-        const ids = columns.map((c) => c.id)
-        const a = ids.indexOf(lastColClick.current)
-        const b = ids.indexOf(id)
-        if (a >= 0 && b >= 0) {
-          const [lo, hi] = a < b ? [a, b] : [b, a]
-          next = new Set([...next, ...ids.slice(lo, hi + 1)])
-        }
-      }
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      lastColClick.current = id
+      const next = updateSelection(prev, id, ids, mode, colAnchor.current)
+      if (mode === 'replace' || mode === 'range') colAnchor.current = id
       return next
     })
   }
@@ -595,6 +554,24 @@ export function Spreadsheet({
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {client && (
+            <button
+              type="button"
+              onClick={() =>
+                exportProformaAsInvoice(proforma, client, {
+                  companyName: invoiceMeta?.companyName,
+                  footer: invoiceMeta?.footer,
+                  currency: invoiceMeta?.currency,
+                  rowIds: rowIds.length ? rowIds : undefined,
+                  columnIds: colIds.length ? colIds : undefined,
+                })
+              }
+              className={ui.btnSecondary + ' py-1.5 text-[11px]'}
+            >
+              <FilePlus className="mr-1 inline h-3.5 w-3.5" />
+              Create invoice
+            </button>
+          )}
           {onCreateProforma && (
             <button type="button" onClick={onCreateProforma} className={ui.btnSecondary + ' py-1.5 text-[11px]'}>
               <FilePlus className="mr-1 inline h-3.5 w-3.5" />
@@ -639,7 +616,7 @@ export function Spreadsheet({
 
       <div className="min-h-0 flex-1 overflow-auto">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
-          <table className="border-collapse text-[12px]" style={{ tableLayout: 'fixed' }}>
+          <table className={cn('border-collapse text-[12px]', showGridLines && 'border border-slate-200')} style={{ tableLayout: 'fixed' }}>
             <thead className="sticky top-0 z-20">
               <tr>
                 <th className="sticky left-0 z-30 w-10 border-b border-r border-slate-200 bg-slate-100">

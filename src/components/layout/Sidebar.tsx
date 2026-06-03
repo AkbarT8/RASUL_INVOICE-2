@@ -1,13 +1,13 @@
-import { NavLink, useParams } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
   Search,
   Settings,
   LogOut,
-  ChevronRight,
   FileSpreadsheet,
   FolderOpen,
+  X,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAppStore } from '../../store/useAppStore'
@@ -26,16 +26,25 @@ export function Sidebar() {
   const username = useAppStore((s) => s.username)
   const saving = useAppStore((s) => s.saving)
   const store = useAppStore((s) => s.store)
-  const { clientId, proformaId } = useParams()
+  const openTabs = useAppStore((s) => s.openTabs)
+  const unpinTab = useAppStore((s) => s.unpinTab)
 
-  const client = clientId ? store.clients.find((c) => c.id === clientId) : null
-  const proforma = proformaId
-    ? store.proformas.find((p) => p.id === proformaId)
-    : null
+  function tabLabel(tab: (typeof openTabs)[0]) {
+    if (tab.type === 'client') {
+      return store.clients.find((c) => c.id === tab.clientId)?.name || 'Client'
+    }
+    const pf = store.proformas.find((p) => p.id === tab.proformaId)
+    return pf?.number || 'Proforma'
+  }
+
+  function tabTo(tab: (typeof openTabs)[0]) {
+    if (tab.type === 'client') return `/clients/${tab.clientId}`
+    return `/clients/${tab.clientId}/proformas/${tab.proformaId}`
+  }
 
   return (
     <aside
-      className={`flex h-full w-[240px] shrink-0 flex-col border-r ${ui.border} ${ui.surface}`}
+      className={`flex h-full w-[260px] shrink-0 flex-col border-r ${ui.border} ${ui.surface}`}
     >
       <div className={`border-b ${ui.border} px-4 py-4`}>
         <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
@@ -64,7 +73,7 @@ export function Sidebar() {
             className={({ isActive }) =>
               cn(
                 'mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors',
-                isActive && !clientId ? ui.navActive : ui.navIdle,
+                isActive ? ui.navActive : ui.navIdle,
               )
             }
           >
@@ -73,50 +82,45 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {client && (
+        {openTabs.length > 0 && (
           <div className="mt-3 border-t border-slate-100 pt-3">
-            <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-              Client
+            <p className="px-3 pb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              Open ({openTabs.length})
             </p>
-            <NavLink
-              to={`/clients/${client.id}`}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-[12px] transition-colors',
-                  isActive && !proformaId ? ui.navActive : ui.navIdle,
-                )
-              }
-            >
-              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-              <span className="truncate font-medium">{client.name}</span>
-            </NavLink>
-
-            {proforma && (
-              <div className="mt-1 pl-2">
-                <div className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-slate-400">
-                  <ChevronRight className="h-3 w-3" />
-                  Proforma
-                </div>
-                <NavLink
-                  to={`/clients/${client.id}/proformas/${proforma.id}`}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-2 rounded-md px-3 py-2 text-[12px] transition-colors',
-                      isActive ? ui.navActive : ui.navIdle,
-                    )
-                  }
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                  <span className="truncate font-medium">{proforma.number}</span>
-                </NavLink>
-              </div>
-            )}
-
-            {!proforma && clientId && (
-              <p className="px-3 pt-2 text-[11px] text-slate-400">
-                Open a proforma to see it here
-              </p>
-            )}
+            <ul className="space-y-0.5">
+              {openTabs.map((tab) => (
+                <li key={tab.id} className="group flex items-center gap-0.5">
+                  <NavLink
+                    to={tabTo(tab)}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pl-2 pr-1 text-[12px] transition-colors',
+                        isActive ? ui.navActive : ui.navIdle,
+                      )
+                    }
+                  >
+                    {tab.type === 'client' ? (
+                      <FolderOpen className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                    ) : (
+                      <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                    )}
+                    <span className="truncate">{tabLabel(tab)}</span>
+                  </NavLink>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      unpinTab(tab.id)
+                    }}
+                    className="rounded p-1 text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100"
+                    title="Close tab"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </nav>

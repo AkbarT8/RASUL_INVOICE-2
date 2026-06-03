@@ -1,12 +1,6 @@
 export type CellType = 'text' | 'number' | 'date' | 'status' | 'notes'
-export type CellColor =
-  | 'green'
-  | 'red'
-  | 'yellow'
-  | 'blue'
-  | 'orange'
-  | 'purple'
-  | null
+/** Hex (#RRGGBB) or legacy name */
+export type CellColor = string | null
 
 export interface Cell {
   value: string
@@ -57,6 +51,15 @@ export interface AppSettings {
   defaultColumnWidth: number
   compactTable: boolean
   confirmDeletes: boolean
+  proformaPrefix: string
+  currencySymbol: string
+  defaultRowsToAdd: number
+  defaultColsToAdd: number
+  autoSaveMs: number
+  showGridLines: boolean
+  invoiceCompanyName: string
+  invoiceFooter: string
+  dateFormat: 'eu' | 'us' | 'iso'
 }
 
 export interface AppStore {

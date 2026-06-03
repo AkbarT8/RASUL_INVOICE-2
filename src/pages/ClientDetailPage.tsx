@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, FileSpreadsheet, Plus, Trash2 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
@@ -10,9 +11,14 @@ export function ClientDetailPage() {
   const updateClient = useAppStore((s) => s.updateClient)
   const deleteClient = useAppStore((s) => s.deleteClient)
   const addProforma = useAppStore((s) => s.addProforma)
+  const pinClient = useAppStore((s) => s.pinClient)
   const deleteProforma = useAppStore((s) => s.deleteProforma)
 
   const client = store.clients.find((c) => c.id === clientId)
+  useEffect(() => {
+    if (clientId) pinClient(clientId)
+  }, [clientId, pinClient])
+
   const proformas = store.proformas.filter((p) => p.clientId === clientId)
 
   if (!client) {
