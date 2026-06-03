@@ -2,9 +2,21 @@ import ExcelJS from 'exceljs'
 import type { Client, Column, Proforma, Row } from '../../shared/types'
 import { colorToExcelArgb, normalizeColor } from './colors'
 
-function applyCellStyle(cell: ExcelJS.Cell, color: string | null, bold = false) {
-  cell.font = { name: 'Calibri', size: 10, bold }
-  cell.alignment = { vertical: 'middle', wrapText: true }
+function applyCellStyle(
+  cell: ExcelJS.Cell,
+  color: string | null,
+  data?: { bold?: boolean; italic?: boolean; underline?: boolean; align?: string },
+) {
+  cell.font = {
+    name: 'Calibri',
+    size: 10,
+    bold: data?.bold ?? false,
+    italic: data?.italic ?? false,
+    underline: data?.underline ?? false,
+  }
+  const h =
+    data?.align === 'center' ? 'center' : data?.align === 'right' ? 'right' : 'left'
+  cell.alignment = { vertical: 'middle', horizontal: h, wrapText: true }
   cell.border = {
     top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
     left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -38,7 +50,7 @@ function buildSheet(
   columns.forEach((col, i) => {
     const cell = sheet.getCell(1, i + 1)
     cell.value = col.name
-    applyCellStyle(cell, normalizeColor(col.color), true)
+    applyCellStyle(cell, normalizeColor(col.color), { bold: true })
     sheet.getColumn(i + 1).width = Math.max(10, Math.round(col.width / 7))
   })
 
@@ -47,7 +59,12 @@ function buildSheet(
       const data = row.cells[col.id]
       const cell = sheet.getCell(ri + 2, ci + 1)
       cell.value = data?.value ?? ''
-      applyCellStyle(cell, normalizeColor(data?.color ?? col.color))
+      applyCellStyle(cell, normalizeColor(data?.color ?? col.color), {
+        bold: data?.bold,
+        italic: data?.italic,
+        underline: data?.underline,
+        align: data?.align,
+      })
     })
   })
 }
@@ -131,7 +148,7 @@ export async function exportProformaAsInvoice(
   columns.forEach((col, i) => {
     const cell = sheet.getCell(startRow, i + 1)
     cell.value = col.name
-    applyCellStyle(cell, normalizeColor(col.color), true)
+    applyCellStyle(cell, normalizeColor(col.color), { bold: true })
   })
 
   rows.forEach((row, ri) => {
@@ -139,7 +156,12 @@ export async function exportProformaAsInvoice(
       const data = row.cells[col.id]
       const cell = sheet.getCell(startRow + 1 + ri, ci + 1)
       cell.value = data?.value ?? ''
-      applyCellStyle(cell, normalizeColor(data?.color ?? col.color))
+      applyCellStyle(cell, normalizeColor(data?.color ?? col.color), {
+        bold: data?.bold,
+        italic: data?.italic,
+        underline: data?.underline,
+        align: data?.align,
+      })
     })
   })
 

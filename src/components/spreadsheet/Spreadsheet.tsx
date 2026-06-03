@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -27,19 +27,35 @@ import {
   Trash2,
   Palette,
 } from 'lucide-react'
-import type { Cell, CellColor, Client, Column, Proforma, Row } from '../../../shared/types'
+import type { Cell, CellAlign, CellColor, Client, Column, MergedRegion, Proforma, Row } from '../../../shared/types'
 import { cn, uid } from '../../lib/utils'
 import { exportProformaToExcel, getSortedRows, getVisibleColumns } from '../../lib/excel'
-import { updateSelection, selectionModeFromMouseEvent } from '../../lib/selection'
+import {
+  updateSelection,
+  selectionModeFromMouseEvent,
+  updateCellSelection,
+  cellKeysInRect,
+} from '../../lib/selection'
 import { colorStyle } from '../../lib/colors'
+import {
+  applyFormatPatch,
+  cellKey,
+  cellStyleClasses,
+  collectTargetCellKeys,
+  createMergeFromCells,
+  emptyCell,
+  getMergeAt,
+  isHiddenByMerge,
+  isMergeAnchor,
+  normalizeCell,
+  parseCellKey,
+  toggleFormat,
+} from '../../lib/cell-format'
 import { ColorPicker } from './ColorPicker'
 import { DownloadNameModal } from './DownloadNameModal'
 import { InvoicePreviewModal } from './InvoicePreviewModal'
+import { FormatToolbar } from './FormatToolbar'
 import { ui } from '../../lib/theme'
-
-function emptyCell(): Cell {
-  return { value: '', type: 'text', color: null }
-}
 
 function clampCount(n: number) {
   return Math.max(1, Math.min(200, Math.floor(n) || 1))
@@ -97,61 +113,67 @@ function CellEditor({
   cell,
   cellStyle,
   compact,
+  selected,
   onChange,
+  onMouseDown,
+  onMouseEnter,
 }: {
   cell: Cell
   cellStyle?: React.CSSProperties
   compact?: boolean
+  selected: boolean
   onChange: (cell: Cell) => void
+  onMouseDown: (e: React.MouseEvent) => void
+  onMouseEnter: () => void
 }) {
-  const [menu, setMenu] = useState(false)
   const h = compact ? 'min-h-[28px]' : 'min-h-[34px]'
+  const inputClass = cn(
+    'w-full bg-transparent px-2 py-1 text-[12px] outline-none',
+    cellStyleClasses(cell),
+  )
 
   return (
-    <div className={cn('group/cell relative border-r border-slate-200', h)} style={cellStyle}>
+    <div
+      className={cn(
+        'relative border-r border-slate-200',
+        h,
+        selected && 'ring-2 ring-inset ring-violet-400 z-[1]',
+      )}
+      style={cellStyle}
+      onMouseDown={onMouseDown}
+      onMouseEnter={onMouseEnter}
+    >
       {cell.type === 'notes' ? (
         <textarea
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
           rows={compact ? 1 : 2}
-          className="w-full resize-none bg-transparent px-2 py-1 text-[12px] outline-none"
+          className={cn(inputClass, 'resize-none')}
+          onMouseDown={(e) => e.stopPropagation()}
         />
       ) : cell.type === 'date' ? (
         <input
           type="date"
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          className="w-full bg-transparent px-2 py-1 text-[12px] outline-none"
+          className={inputClass}
+          onMouseDown={(e) => e.stopPropagation()}
         />
       ) : cell.type === 'number' ? (
         <input
           type="number"
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          className="w-full bg-transparent px-2 py-1 text-[12px] tabular-nums outline-none"
+          className={cn(inputClass, 'tabular-nums')}
+          onMouseDown={(e) => e.stopPropagation()}
         />
       ) : (
         <input
           value={cell.value}
           onChange={(e) => onChange({ ...cell, value: e.target.value })}
-          className="w-full bg-transparent px-2 py-1 text-[12px] outline-none"
+          className={inputClass}
+          onMouseDown={(e) => e.stopPropagation()}
         />
-      )}
-      <button
-        type="button"
-        onClick={() => setMenu(!menu)}
-        className="absolute right-0.5 top-0.5 rounded p-0.5 text-slate-400 opacity-0 hover:bg-white hover:text-slate-700 group-hover/cell:opacity-100"
-      >
-        <Palette className="h-3 w-3" />
-      </button>
-      {menu && (
-        <div className="absolute right-0 top-full z-50">
-          <ColorPicker
-            value={cell.color}
-            onChange={(c) => onChange({ ...cell, color: c })}
-            onClose={() => setMenu(false)}
-          />
-        </div>
       )}
     </div>
   )
@@ -160,17 +182,25 @@ function CellEditor({
 function SortableRow({
   row,
   columns,
+  merges,
   selected,
+  selectedCells,
   compact,
   onSelect,
   onUpdateCell,
+  onCellMouseDown,
+  onCellMouseEnter,
 }: {
   row: Row
   columns: Column[]
+  merges?: MergedRegion[]
   selected: boolean
+  selectedCells: Set<string>
   compact?: boolean
   onSelect: (id: string, e: React.MouseEvent, contextMenu?: boolean, fromCheckbox?: boolean) => void
   onUpdateCell: (rowId: string, colId: string, cell: Cell) => void
+  onCellMouseDown: (rowId: string, colId: string, e: React.MouseEvent) => void
+  onCellMouseEnter: (rowId: string, colId: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -205,19 +235,31 @@ function SortableRow({
         </div>
       </td>
       {columns.map((col) => {
-        const cell = row.cells[col.id] || emptyCell()
+        if (isHiddenByMerge(merges, row.id, col.id)) return null
+        const cell = normalizeCell(row.cells[col.id])
         const cellStyle = colorStyle(cell.color) ?? colorStyle(col.color)
+        const key = cellKey(row.id, col.id)
+        const merge = getMergeAt(merges, row.id, col.id)
+        const span =
+          merge && isMergeAnchor(merge, row.id, col.id)
+            ? { rowSpan: merge.rowIds.length, colSpan: merge.colIds.length }
+            : undefined
         return (
           <td
             key={col.id}
             className="p-0 align-top"
             style={{ width: col.width, maxWidth: col.width }}
+            rowSpan={span?.rowSpan}
+            colSpan={span?.colSpan}
           >
             <CellEditor
               cell={cell}
               cellStyle={cellStyle}
               compact={compact}
+              selected={selectedCells.has(key)}
               onChange={(next) => onUpdateCell(row.id, col.id, next)}
+              onMouseDown={(e) => onCellMouseDown(row.id, col.id, e)}
+              onMouseEnter={() => onCellMouseEnter(row.id, col.id)}
             />
           </td>
         )
@@ -353,6 +395,9 @@ export function Spreadsheet({
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [rowCount, setRowCount] = useState(defaultRowsToAdd)
   const [colCount, setColCount] = useState(defaultColsToAdd)
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
+  const cellAnchor = useRef<string | null>(null)
+  const dragSelect = useRef(false)
 
   const columns = useMemo(() => getVisibleColumns(proforma.columns), [proforma.columns])
   const rows = useMemo(() => getSortedRows(proforma.rows), [proforma.rows])
@@ -454,6 +499,108 @@ export function Spreadsheet({
     })
   }
 
+  const allCellKeys = useMemo(
+    () => rows.flatMap((r) => columns.map((c) => cellKey(r.id, c.id))),
+    [rows, columns],
+  )
+
+  function clearAllSelection() {
+    setSelectedRows(new Set())
+    setSelectedCols(new Set())
+    setSelectedCells(new Set())
+    rowAnchor.current = null
+    colAnchor.current = null
+    cellAnchor.current = null
+    dragSelect.current = false
+  }
+
+  function applyToTargetCells(mutator: (cell: Cell) => Cell) {
+    const keys = collectTargetCellKeys(
+      proforma,
+      columns.map((c) => c.id),
+      rows,
+      selectedCells,
+      selectedRows,
+      selectedCols,
+    )
+    if (!keys.length) return
+    const keySet = new Set(keys)
+    patch({
+      rows: proforma.rows.map((r) => {
+        let changed = false
+        const cells = { ...r.cells }
+        for (const k of keySet) {
+          const { rowId, colId } = parseCellKey(k)
+          if (rowId !== r.id) continue
+          cells[colId] = mutator(normalizeCell(cells[colId]))
+          changed = true
+        }
+        return changed ? { ...r, cells } : r
+      }),
+    })
+  }
+
+  function onCellMouseDown(rowId: string, colId: string, e: React.MouseEvent) {
+    if (e.button !== 0) return
+    const key = cellKey(rowId, colId)
+    const mode = selectionModeFromMouseEvent(e)
+    if (mode === 'replace' || mode === 'range') {
+      dragSelect.current = true
+      cellAnchor.current = key
+    }
+    setSelectedCells((prev) => {
+      const next = updateCellSelection(prev, key, allCellKeys, mode, cellAnchor.current)
+      if (mode === 'replace' || mode === 'range') cellAnchor.current = key
+      return next
+    })
+    if (mode === 'replace') {
+      setSelectedRows(new Set())
+      setSelectedCols(new Set())
+    }
+  }
+
+  function onCellMouseEnter(rowId: string, colId: string) {
+    if (!dragSelect.current || !cellAnchor.current) return
+    const key = cellKey(rowId, colId)
+    const { rowId: ar, colId: ac } = parseCellKey(cellAnchor.current)
+    setSelectedCells(
+      cellKeysInRect(
+        ar,
+        ac,
+        rowId,
+        colId,
+        rows.map((r) => r.id),
+        columns.map((c) => c.id),
+      ),
+    )
+    void key
+  }
+
+  useEffect(() => {
+    const up = () => {
+      dragSelect.current = false
+    }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
+
+  function mergeSelectedCells() {
+    const keys = [...selectedCells]
+    if (keys.length < 2) return
+    const merge = createMergeFromCells(proforma, keys, rows, columns)
+    if (!merge) return
+    const merges = [...(proforma.merges || []), merge]
+    patch({ merges })
+  }
+
+  function selectionSummary() {
+    const parts: string[] = []
+    if (selectedCells.size) parts.push(`${selectedCells.size} cells`)
+    if (selectedRows.size) parts.push(`${selectedRows.size} rows`)
+    if (selectedCols.size) parts.push(`${selectedCols.size} cols`)
+    return parts.join(' · ') || 'Selection'
+  }
+
   const rowAnchor = useRef<string | null>(null)
   const colAnchor = useRef<string | null>(null)
 
@@ -492,8 +639,23 @@ export function Spreadsheet({
   function runExcelExport(scope: 'all' | 'selected' | 'visible', filename: string) {
     const opts: { rowIds?: string[]; columnIds?: string[]; filename: string } = { filename }
     if (scope === 'selected') {
-      if (rowIds.length) opts.rowIds = rowIds
-      if (colIds.length) opts.columnIds = colIds
+      const keys = collectTargetCellKeys(
+        proforma,
+        columns.map((c) => c.id),
+        rows,
+        selectedCells,
+        selectedRows,
+        selectedCols,
+      )
+      const rSet = new Set<string>()
+      const cSet = new Set<string>()
+      keys.forEach((k) => {
+        const { rowId, colId } = parseCellKey(k)
+        rSet.add(rowId)
+        cSet.add(colId)
+      })
+      if (rSet.size) opts.rowIds = [...rSet]
+      if (cSet.size) opts.columnIds = [...cSet]
     } else if (scope === 'visible') {
       opts.columnIds = columns.map((c) => c.id)
     }
@@ -502,7 +664,9 @@ export function Spreadsheet({
 
   const rowIds = [...selectedRows]
   const colIds = [...selectedCols]
-  const hasSelection = rowIds.length > 0 || colIds.length > 0
+  const hasSelection =
+    rowIds.length > 0 || colIds.length > 0 || selectedCells.size > 0
+  const hasFormatSelection = hasSelection
 
   function onRowDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -574,8 +738,17 @@ export function Spreadsheet({
             >
               Delete cols ({colIds.length})
             </button>
-            <span className="text-[11px] text-slate-500">{colIds.length} column(s) selected</span>
           </>
+        )}
+
+        {hasSelection && (
+          <button
+            type="button"
+            onClick={clearAllSelection}
+            className={ui.btnSecondary + ' py-1.5 text-[11px]'}
+          >
+            Снять выделение
+          </button>
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -631,6 +804,30 @@ export function Spreadsheet({
           </div>
         </div>
       </div>
+
+      {hasFormatSelection && (
+        <FormatToolbar
+          selectionLabel={selectionSummary()}
+          onClearSelection={clearAllSelection}
+          onToggleBold={() =>
+            applyToTargetCells((c) => toggleFormat(c, 'bold'))
+          }
+          onToggleItalic={() =>
+            applyToTargetCells((c) => toggleFormat(c, 'italic'))
+          }
+          onToggleUnderline={() =>
+            applyToTargetCells((c) => toggleFormat(c, 'underline'))
+          }
+          onAlign={(align: CellAlign) =>
+            applyToTargetCells((c) => applyFormatPatch(c, { align }))
+          }
+          onColor={(color) =>
+            applyToTargetCells((c) => ({ ...c, color }))
+          }
+          onMerge={mergeSelectedCells}
+          canMerge={selectedCells.size >= 2}
+        />
+      )}
 
       <div className="min-h-0 flex-1 overflow-auto">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
@@ -698,10 +895,14 @@ export function Spreadsheet({
                       key={row.id}
                       row={row}
                       columns={columns}
+                      merges={proforma.merges}
                       selected={selectedRows.has(row.id)}
+                      selectedCells={selectedCells}
                       compact={compact}
                       onSelect={selectRow}
                       onUpdateCell={updateCell}
+                      onCellMouseDown={onCellMouseDown}
+                      onCellMouseEnter={onCellMouseEnter}
                     />
                   ))}
                 </tbody>
@@ -732,8 +933,20 @@ export function Spreadsheet({
         <InvoicePreviewModal
           proforma={proforma}
           client={client}
-          rowIds={rowIds.length ? rowIds : undefined}
-          columnIds={colIds.length ? colIds : undefined}
+          rowIds={
+            rowIds.length
+              ? rowIds
+              : selectedCells.size
+                ? [...new Set([...selectedCells].map((k) => parseCellKey(k).rowId))]
+                : undefined
+          }
+          columnIds={
+            colIds.length
+              ? colIds
+              : selectedCells.size
+                ? [...new Set([...selectedCells].map((k) => parseCellKey(k).colId))]
+                : undefined
+          }
           initial={{
             companyName: invoiceMeta?.companyName || '',
             invoiceNumber: proforma.number,

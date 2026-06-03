@@ -1,11 +1,30 @@
 export type CellType = 'text' | 'number' | 'date' | 'status' | 'notes'
-/** Hex (#RRGGBB) or legacy name */
 export type CellColor = string | null
+export type CellAlign = 'left' | 'center' | 'right'
+
+export interface CellFormat {
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  align?: CellAlign
+}
 
 export interface Cell {
   value: string
   type: CellType
   color: CellColor
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  align?: CellAlign
+}
+
+export interface MergedRegion {
+  id: string
+  rowIds: string[]
+  colIds: string[]
+  anchorRowId: string
+  anchorColId: string
 }
 
 export interface Column {
@@ -32,6 +51,7 @@ export interface Proforma {
   notes: string
   columns: Column[]
   rows: Row[]
+  merges?: MergedRegion[]
   createdAt: string
   updatedAt: string
 }

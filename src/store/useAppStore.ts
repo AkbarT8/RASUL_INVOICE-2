@@ -9,6 +9,7 @@ import {
   saveLocalStore,
   isServerApiEnabled,
 } from '../lib/persistence'
+import { findAdminByCredentials, loadAdminAccounts } from '../lib/admins'
 import { searchStore } from '../lib/search'
 import { loadOpenTabs, makeTab, saveOpenTabs, type OpenTab } from '../lib/open-tabs'
 import type { SearchResult } from '../../shared/types'
@@ -120,7 +121,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const creds = getClientCredentials()
-    if (username !== creds.username || password !== creds.password) {
+    const admins = loadAdminAccounts()
+    const okPrimary = username === creds.username && password === creds.password
+    const okAdmin = Boolean(findAdminByCredentials(username, password, admins))
+    if (!okPrimary && !okAdmin) {
       throw new Error('Invalid credentials')
     }
     sessionStorage.setItem(SESSION_KEY, username)
