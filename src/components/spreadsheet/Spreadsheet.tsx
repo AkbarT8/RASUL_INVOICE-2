@@ -22,7 +22,6 @@ import {
   Download,
   FilePlus,
   GripVertical,
-  Plus,
 } from 'lucide-react'
 import type { Cell, CellAlign, Client, Column, MergedRegion, Proforma, Row } from '../../../shared/types'
 import { cn, uid } from '../../lib/utils'
@@ -40,7 +39,6 @@ import {
   cellStyleClasses,
   collectTargetCellKeys,
   createMergeFromCells,
-  emptyCell,
   getMergeAt,
   isHiddenByMerge,
   isMergeAnchor,
@@ -51,12 +49,10 @@ import {
 import { DownloadNameModal } from './DownloadNameModal'
 import { InvoicePreviewModal } from './InvoicePreviewModal'
 import { FormatToolbar } from './FormatToolbar'
-import { columnLetter } from '../../lib/spreadsheet-labels'
+import { getColumnHeaderLayout, getMergedColumnGroup } from '../../lib/column-header-merge'
+import { ensureGridSize, GRID_MIN_COLS, GRID_MIN_ROWS } from '../../lib/grid-size'
+import { applyPasteUpdates, buildPasteUpdates } from '../../lib/paste-columns'
 import { ui } from '../../lib/theme'
-
-function clampCount(n: number) {
-  return Math.max(1, Math.min(200, Math.floor(n) || 1))
-}
 
 interface SpreadsheetProps {
   proforma: Proforma
@@ -70,40 +66,6 @@ interface SpreadsheetProps {
   onCreateProforma?: () => void
   client?: Client
   invoiceMeta?: { companyName: string; footer: string; currency: string }
-}
-
-function CountButton({
-  label,
-  count,
-  onCountChange,
-  onAction,
-}: {
-  label: string
-  count: number
-  onCountChange: (n: number) => void
-  onAction: () => void
-}) {
-  return (
-    <div className="flex items-center overflow-hidden rounded-md border border-slate-200 bg-white">
-      <button
-        type="button"
-        onClick={onAction}
-        className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50"
-      >
-        <Plus className="h-3 w-3" />
-        {label}
-      </button>
-      <input
-        type="number"
-        min={1}
-        max={200}
-        value={count}
-        onChange={(e) => onCountChange(Number(e.target.value))}
-        className="w-10 border-l border-slate-200 bg-slate-50 px-1 py-1.5 text-center text-[11px] outline-none"
-        title={`Number of ${label}s to add`}
-      />
-    </div>
-  )
 }
 
 function CellEditor({
@@ -278,6 +240,8 @@ function SortableRow({
 function SortableColumnHeader({
   column,
   letter,
+  colSpan = 1,
+  headerWidth,
   selected,
   onMouseDown,
   onMouseEnter,
@@ -285,6 +249,8 @@ function SortableColumnHeader({
 }: {
   column: Column
   letter: string
+  colSpan?: number
+  headerWidth?: number
   selected: boolean
   onMouseDown: (e: React.MouseEvent) => void
   onMouseEnter: () => void
@@ -297,11 +263,12 @@ function SortableColumnHeader({
   return (
     <th
       ref={setNodeRef}
+      colSpan={colSpan}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        width: column.width,
-        maxWidth: column.width,
+        width: headerWidth ?? column.width,
+        maxWidth: headerWidth ?? column.width,
       }}
       className={cn(
         'relative select-none border-r border-b border-slate-200 bg-slate-100 p-0',
@@ -352,8 +319,8 @@ export function Spreadsheet({
   compact,
   confirmDeletes = true,
   defaultColumnWidth = 120,
-  defaultRowsToAdd = 1,
-  defaultColsToAdd = 1,
+  defaultRowsToAdd: _defaultRowsToAdd = 1,
+  defaultColsToAdd: _defaultColsToAdd = 1,
   showGridLines = true,
   onCreateProforma,
   client,
@@ -366,8 +333,6 @@ export function Spreadsheet({
     null | { scope: 'all' | 'selected' | 'visible' }
   >(null)
   const [invoiceOpen, setInvoiceOpen] = useState(false)
-  const [rowCount, setRowCount] = useState(defaultRowsToAdd)
-  const [colCount, setColCount] = useState(defaultColsToAdd)
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
   const cellAnchor = useRef<string | null>(null)
   const dragSelect = useRef(false)
@@ -387,50 +352,27 @@ export function Spreadsheet({
     [proforma, onChange],
   )
 
+  useEffect(() => {
+    if (
+      proforma.rows.length >= GRID_MIN_ROWS &&
+      proforma.columns.length >= GRID_MIN_COLS
+    ) {
+      return
+    }
+    const expanded = ensureGridSize(proforma, defaultColumnWidth)
+    if (expanded) onChange(expanded)
+  }, [
+    proforma.id,
+    proforma.rows.length,
+    proforma.columns.length,
+    defaultColumnWidth,
+    onChange,
+    proforma,
+  ])
+
   function confirm(msg: string) {
     if (!confirmDeletes) return true
     return window.confirm(msg)
-  }
-
-  function addRows(n = rowCount) {
-    const count = clampCount(n)
-    const base = proforma.rows.length
-    const newRows: Row[] = []
-    for (let i = 0; i < count; i++) {
-      const cells: Record<string, Cell> = {}
-      proforma.columns.forEach((col) => {
-        cells[col.id] = emptyCell()
-      })
-      newRows.push({ id: uid('row'), cells, order: base + i })
-    }
-    patch({ rows: [...proforma.rows, ...newRows] })
-  }
-
-  function addColumns(n = colCount) {
-    const count = clampCount(n)
-    const start = proforma.columns.length
-    const newCols: Column[] = []
-    for (let i = 0; i < count; i++) {
-      const col: Column = {
-        id: uid('col'),
-        name: '',
-        width: defaultColumnWidth,
-        hidden: false,
-        order: start + i,
-        color: null,
-      }
-      newCols.push(col)
-    }
-    patch({
-      columns: [...proforma.columns, ...newCols],
-      rows: proforma.rows.map((r) => {
-        const cells = { ...r.cells }
-        newCols.forEach((c) => {
-          cells[c.id] = emptyCell()
-        })
-        return { ...r, cells }
-      }),
-    })
   }
 
   function deleteRows(ids: string[]) {
@@ -579,6 +521,29 @@ export function Spreadsheet({
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
   }, [])
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (selectedCols.size === 0) return
+      const text = e.clipboardData?.getData('text/plain')
+      if (!text) return
+      e.preventDefault()
+      const orderedColIds = columns
+        .filter((c) => selectedCols.has(c.id))
+        .map((c) => c.id)
+      let startRow = 0
+      if (selectedRows.size > 0) {
+        const first = rows.find((r) => selectedRows.has(r.id))
+        if (first) startRow = rows.findIndex((r) => r.id === first.id)
+      }
+      const updates = buildPasteUpdates(text, orderedColIds, rows, startRow)
+      if (!updates.length) return
+      patch({ rows: applyPasteUpdates(proforma.rows, updates) })
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [selectedCols, selectedRows, columns, rows, proforma.rows, patch])
+
+
 
   function mergeSelectedCells() {
     const keys = collectTargetCellKeys(
@@ -594,7 +559,6 @@ export function Spreadsheet({
     if (!merge) return
     const merges = [...(proforma.merges || []), merge]
     patch({ merges })
-    clearAllSelection()
   }
 
   function selectionSummary() {
@@ -635,10 +599,19 @@ export function Spreadsheet({
   function selectCol(id: string, e: React.MouseEvent, contextMenu = false) {
     e.preventDefault()
     const mode = selectionModeFromMouseEvent(e, contextMenu, false)
+    const group = getMergedColumnGroup(id, columns, proforma.merges)
+    const primaryId = group[0]
     const ids = columns.map((c) => c.id)
-    const next = updateSelection(selectedCols, id, ids, mode, colAnchor.current)
-    if (mode === 'replace' || mode === 'range') colAnchor.current = id
-    if (mode === 'replace' || mode === 'range') colDragSelect.current = true
+    let next: Set<string>
+    if (group.length > 1 && mode === 'replace') {
+      next = new Set(group)
+      colAnchor.current = primaryId
+      colDragSelect.current = true
+    } else {
+      next = updateSelection(selectedCols, primaryId, ids, mode, colAnchor.current)
+      if (mode === 'replace' || mode === 'range') colAnchor.current = primaryId
+      if (mode === 'replace' || mode === 'range') colDragSelect.current = true
+    }
     setSelectedCols(next)
     if (mode === 'replace') setSelectedRows(new Set())
     syncCellsFromCols(next)
@@ -737,17 +710,18 @@ export function Spreadsheet({
   }
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div
+      className="flex h-full flex-col bg-white"
+      onMouseDown={(e) => {
+        if (!(e.target as HTMLElement).closest('table')) clearAllSelection()
+      }}
+    >
       <div
         className={`flex shrink-0 flex-wrap items-center gap-2 border-b ${ui.border} bg-slate-50/80 px-3 py-2`}
       >
-        <CountButton label="Row" count={rowCount} onCountChange={setRowCount} onAction={() => addRows()} />
-        <CountButton
-          label="Column"
-          count={colCount}
-          onCountChange={setColCount}
-          onAction={() => addColumns()}
-        />
+        <span className="text-[11px] text-slate-500">
+          {GRID_MIN_ROWS}×{GRID_MIN_COLS} · Ctrl+V в выбранные колонки
+        </span>
 
         {rowIds.length > 0 && (
           <>
@@ -775,16 +749,6 @@ export function Spreadsheet({
               Delete cols ({colIds.length})
             </button>
           </>
-        )}
-
-        {hasSelection && (
-          <button
-            type="button"
-            onClick={clearAllSelection}
-            className={ui.btnSecondary + ' py-1.5 text-[11px]'}
-          >
-            Снять выделение
-          </button>
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -844,7 +808,6 @@ export function Spreadsheet({
       {hasFormatSelection && (
         <FormatToolbar
           selectionLabel={selectionSummary()}
-          onClearSelection={clearAllSelection}
           onToggleBold={() =>
             applyToTargetCells((c) => toggleFormat(c, 'bold'))
           }
@@ -895,23 +858,34 @@ export function Spreadsheet({
                   title="Выделить всё"
                 />
                 <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
-                  {columns.map((col, colIndex) => (
-                    <SortableColumnHeader
-                      key={col.id}
-                      column={col}
-                      letter={columnLetter(colIndex)}
-                      selected={selectedCols.has(col.id)}
-                      onMouseDown={(e) => selectCol(col.id, e)}
-                      onMouseEnter={() => onColHeaderEnter(col.id)}
-                      onResize={(width) =>
-                        patch({
-                          columns: proforma.columns.map((c) =>
-                            c.id === col.id ? { ...c, width } : c,
-                          ),
-                        })
-                      }
-                    />
-                  ))}
+                  {columns.map((col, colIndex) => {
+                    const layout = getColumnHeaderLayout(
+                      col.id,
+                      colIndex,
+                      columns,
+                      proforma.merges,
+                    )
+                    if (layout.hidden) return null
+                    return (
+                      <SortableColumnHeader
+                        key={col.id}
+                        column={col}
+                        letter={layout.letter}
+                        colSpan={layout.colSpan}
+                        headerWidth={layout.width}
+                        selected={selectedCols.has(col.id)}
+                        onMouseDown={(e) => selectCol(col.id, e)}
+                        onMouseEnter={() => onColHeaderEnter(col.id)}
+                        onResize={(width) =>
+                          patch({
+                            columns: proforma.columns.map((c) =>
+                              c.id === col.id ? { ...c, width } : c,
+                            ),
+                          })
+                        }
+                      />
+                    )
+                  })}
                 </SortableContext>
               </tr>
             </thead>
@@ -940,11 +914,7 @@ export function Spreadsheet({
             </DndContext>
           </table>
         </DndContext>
-        {rows.length === 0 && (
-          <p className="py-12 text-center text-[12px] text-slate-400">
-            No rows yet. Set a number and click + Row.
-          </p>
-        )}
+
       </div>
 
       {excelDownload && (

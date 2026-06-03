@@ -9,16 +9,13 @@ import {
   Merge,
   Palette,
   Underline,
-  X,
 } from 'lucide-react'
 import { useState } from 'react'
 import type { CellAlign, CellColor } from '../../../shared/types'
 import { ColorPicker } from './ColorPicker'
-import { ui } from '../../lib/theme'
 
 export function FormatToolbar({
   selectionLabel,
-  onClearSelection,
   onToggleBold,
   onToggleItalic,
   onToggleUnderline,
@@ -31,7 +28,6 @@ export function FormatToolbar({
   onDeleteSelectedColumns,
 }: {
   selectionLabel: string
-  onClearSelection: () => void
   onToggleBold: () => void
   onToggleItalic: () => void
   onToggleUnderline: () => void
@@ -53,11 +49,6 @@ export function FormatToolbar({
       className={`flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-violet-50/80 px-3 py-1.5`}
     >
       <span className="mr-1 text-[11px] font-medium text-violet-800">{selectionLabel}</span>
-      <button type="button" onClick={onClearSelection} className={ui.btnSecondary + ' py-1 text-[11px]'}>
-        <X className="mr-1 inline h-3 w-3" />
-        Снять выделение
-      </button>
-      <span className="mx-1 h-4 w-px bg-slate-300" />
       <button type="button" className={btn} onClick={onToggleBold} title="Bold">
         <Bold className="h-3.5 w-3.5" />
       </button>
