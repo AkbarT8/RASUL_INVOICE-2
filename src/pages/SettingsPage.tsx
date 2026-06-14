@@ -9,6 +9,7 @@ import {
   type AdminAccount,
 } from '../lib/admins'
 import { uid } from '../lib/utils'
+import { buildFeaturesLabel, buildSha } from '../lib/build-info'
 
 export function SettingsPage() {
   const settings = useAppStore((s) => s.store.settings)
@@ -357,6 +358,24 @@ export function SettingsPage() {
             range; right-click to add to selection without clearing others.
           </p>
         </section>
+        <p className={`rounded-lg border border-violet-200 bg-violet-50/60 px-4 py-3 text-center text-[12px] ${ui.textMuted}`}>
+          <span className="font-medium text-violet-900">Версия сборки: {buildSha}</span>
+          <br />
+          {buildFeaturesLabel}
+          <br />
+          <span className="text-[11px]">
+            Если после merge на main ничего не изменилось — откройте{' '}
+            <a
+              className="text-violet-700 underline"
+              href="https://akbart8.github.io/RASUL_INVOICE-2/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub Pages
+            </a>{' '}
+            и нажмите Ctrl+Shift+R. Netlify Drop не обновляется с main автоматически.
+          </span>
+        </p>
       </div>
     </div>
   )
